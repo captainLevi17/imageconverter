@@ -1,3 +1,6 @@
+Project Overview: You're building a comprehensive Windows desktop application for various image manipulation tasks. The goal is to include features like:
+13/05/2025
+
 Work Completed So Far
 Enhanced Image Cropper Feature (Core Functionality):
 We successfully developed and refined the "Enhanced Cropper" tab, which is the most complex feature implemented to date.
