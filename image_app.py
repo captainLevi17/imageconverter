@@ -32,16 +32,98 @@ try:
 except ImportError:
     print("pillow-heif not installed. HEIC support may be limited.")
 
+class ToolTip:
+    """Create a tooltip for a given widget."""
+    def __init__(self, widget, text='widget info', delay=500):
+        self.widget = widget
+        self.text = text
+        self.delay = delay
+        self.tooltip = None
+        self.id = None
+        self.x = self.y = 0
+        self._schedule()
+
+    def _schedule(self):
+        self.unschedule()
+        self.id = self.widget.after(self.delay, self.show)
+
+    def unschedule(self):
+        if self.id:
+            self.widget.after_cancel(self.id)
+            self.id = None
+
+    def show(self):
+        if self.tooltip or not self.text:
+            return
+        
+        x, y, _, _ = self.widget.bbox('insert')
+        x += self.widget.winfo_rootx() + 25
+        y += self.widget.winfo_rooty() + 20
+
+        self.tooltip = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(1)
+        tw.wm_geometry(f"+{x}+{y}")
+        
+        label = ttk.Label(tw, text=self.text, justify='left',
+                         background='#ffffe0', relief='solid', borderwidth=1,
+                         font=('Segoe UI', 9))
+        label.pack(ipadx=1)
+        
+        self.widget.bind('<Leave>', self.hide)
+
+    def hide(self, event=None):
+        if self.tooltip:
+            self.tooltip.destroy()
+            self.tooltip = None
+        self.unschedule()
+
+    def update_text(self, text):
+        self.text = text
+        if self.tooltip:
+            self.tooltip.destroy()
+            self.tooltip = None
+            self.show()
+
 class ImageManipulatorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Comprehensive Image Manipulator")
-        self.root.geometry("900x700")
-        self.root.minsize(700, 500)
+        self.root.geometry("1200x800")
+        self.root.minsize(1000, 700)
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
 
         # Style
         self.style = ttk.Style()
         self.style.theme_use('clam')
+        
+        # Custom styling
+        self.style.configure('.', font=('Segoe UI', 10))
+        self.style.configure('TFrame', background='#f0f0f0')
+        self.style.configure('TLabel', background='#f0f0f0')
+        self.style.configure('TButton', padding=6, relief='flat', background='#e1e1e1')
+        self.style.map('TButton',
+                     foreground=[('pressed', 'black'), ('active', 'black')],
+                     background=[('pressed', '!disabled', '#d0d0d0'), ('active', '#e8e8e8')])
+        
+        # Style for active tab
+        self.style.configure('TNotebook.Tab', padding=[12, 4], font=('Segoe UI', 10, 'bold'))
+        self.style.map('TNotebook.Tab',
+                     background=[('selected', '#f0f0f0'), ('!selected', '#d0d0d0')],
+                     foreground=[('selected', '#2c3e50'), ('!selected', '#7f8c8d')],
+                     padding=[('selected', [12, 4]), ('!selected', [12, 4])])
+        
+        # Style for entry fields
+        self.style.configure('TEntry', padding=4)
+        
+        # Style for the status bar
+        self.style.configure('Status.TLabel', background='#2c3e50', foreground='white', padding=8, font=('Segoe UI', 9))
+        
+        # Style for listbox
+        self.style.configure('TListbox', background='white', fieldbackground='white', foreground='#2c3e50')
+        
+        # Style for the scale (quality slider)
+        self.style.configure('Horizontal.TScale', background='#f0f0f0')
 
         # --- Crop Section State Variables ---
         self.crop_image_path = None
@@ -89,13 +171,55 @@ class ImageManipulatorApp:
         self.current_aspect_ratio_val = None
         self.fixed_aspect_active = False
         
-        # Main frame
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.pack(expand=True, fill=tk.BOTH)
+        # --- HEIC to JPG Section State Variables ---
+        self.heic_file_paths = []
+        self.heic_output_dir = tk.StringVar(value=os.getcwd()) # Default to current dir
+        self.heic_quality_var = tk.IntVar(value=90) # Default quality
+        self.heic_listbox = None
+        self.heic_preview_frame = None
+        self.heic_thumbnails = {}  # Store thumbnail PhotoImage objects to prevent garbage collection
 
-        # Feature Notebook (Tabs)
-        self.feature_notebook = ttk.Notebook(main_frame)
-        self.feature_notebook.pack(expand=True, fill=tk.BOTH, pady=10)
+        # Main frame with grid configuration
+        main_frame = ttk.Frame(self.root, padding="15")
+        main_frame.pack(expand=True, fill=tk.BOTH)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(1, weight=1)  # Give weight to the notebook frame
+        main_frame.rowconfigure(2, weight=0)  # Status bar row (fixed height)
+        
+        # Add a title label with proper grid configuration
+        title_frame = ttk.Frame(main_frame)
+        title_frame.grid(row=0, column=0, sticky='nsew', pady=(0, 15))
+        title_frame.columnconfigure(0, weight=1)  # Allow title to expand
+        
+        title_label = ttk.Label(
+            title_frame,
+            text="Comprehensive Image Manipulator",
+            font=('Segoe UI', 16, 'bold'),
+            foreground='#2c3e50',
+            anchor='center',
+            padding=(0, 0, 0, 5)  # Add padding below the title
+        )
+        title_label.grid(row=0, column=0, sticky='ew')
+        
+        # Add a separator
+        separator = ttk.Separator(title_frame, orient='horizontal')
+        separator.grid(row=1, column=0, sticky='ew', pady=5)
+
+        # Feature Notebook (Tabs) with grid configuration
+        notebook_frame = ttk.Frame(main_frame, style='Card.TFrame')
+        notebook_frame.grid(row=1, column=0, sticky='nsew', pady=5)
+        notebook_frame.columnconfigure(0, weight=1)
+        notebook_frame.rowconfigure(0, weight=1)
+        
+        self.feature_notebook = ttk.Notebook(notebook_frame)
+        self.feature_notebook.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
+        
+        # Configure notebook to expand
+        self.feature_notebook.columnconfigure(0, weight=1)
+        self.feature_notebook.rowconfigure(0, weight=1)
+        
+        # Add a subtle border around the notebook
+        self.style.configure('Card.TFrame', background='#e0e0e0', relief='solid', borderwidth=1)
 
         # --- Create tabs for each feature ---
         self.tab_crop = self.create_feature_tab("Enhanced Cropper") 
@@ -109,16 +233,39 @@ class ImageManipulatorApp:
         # Populate the "Enhanced Cropper" tab.
         self.setup_crop_tab()
 
+        # Populate the "HEIC to JPG" tab.
+        self.setup_heic_to_jpg_tab()
+
         # Status bar
+        status_bar_frame = ttk.Frame(main_frame)
+        status_bar_frame.grid(row=2, column=0, sticky='ew')
+        status_bar_frame.columnconfigure(0, weight=1)
+        
         self.status_bar_text = tk.StringVar()
-        self.status_bar_text.set("Ready")
-        status_bar = ttk.Label(main_frame, textvariable=self.status_bar_text, relief=tk.SUNKEN, anchor=tk.W)
-        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        self.status_bar_text.set(" Ready")
+        
+        status_bar = ttk.Label(
+            status_bar_frame,
+            textvariable=self.status_bar_text,
+            style='Status.TLabel',
+            anchor=tk.W,
+            padding=(10, 5, 10, 5)
+        )
+        status_bar.grid(row=0, column=0, sticky='ew')
+        
+        # Add a resize grip for better UX
+        resize_grip = ttk.Sizegrip(status_bar_frame)
+        resize_grip.grid(row=0, column=1, sticky='se')
 
     def create_feature_tab(self, tab_name):
         """Creates a new tab in the notebook and returns it."""
         tab = ttk.Frame(self.feature_notebook, padding="10")
         self.feature_notebook.add(tab, text=tab_name)
+        
+        # Configure tab to expand
+        tab.columnconfigure(0, weight=1)
+        tab.rowconfigure(0, weight=1)
+        
         return tab
 
     def setup_crop_tab(self):
@@ -126,44 +273,90 @@ class ImageManipulatorApp:
         for widget in self.tab_crop.winfo_children(): 
             widget.destroy()
 
-        # Main content frame for the cropper tab
+        # Main content frame for the cropper tab with grid configuration
+        self.tab_crop.columnconfigure(0, weight=1)
+        self.tab_crop.rowconfigure(0, weight=1)
+        
         cropper_content_frame = ttk.Frame(self.tab_crop)
-        cropper_content_frame.pack(expand=True, fill=tk.BOTH)
+        cropper_content_frame.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
+        cropper_content_frame.columnconfigure(0, weight=1)
+        cropper_content_frame.rowconfigure(1, weight=1)  # Middle frame with canvas gets extra space
 
         # Top: File selection and info
         top_frame = ttk.Frame(cropper_content_frame)
-        top_frame.pack(fill=tk.X, pady=(0, 5))
-
+        top_frame.grid(row=0, column=0, sticky='ew', pady=(0, 10))
+        top_frame.columnconfigure(1, weight=1)  # Allow the file label to expand
+        
+        # Use grid for better control
         load_button = ttk.Button(top_frame, text="Select Image...", command=self.load_image_for_cropping)
-        load_button.pack(side=tk.LEFT, padx=(0, 10))
-
+        load_button.grid(row=0, column=0, padx=(0, 10), sticky='w')
+        
         selected_file_label = ttk.Label(top_frame, textvariable=self.selected_crop_file_var, anchor=tk.W)
-        selected_file_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        selected_file_label.grid(row=0, column=1, sticky='ew')
 
         # Middle: Canvas and Controls
         middle_frame = ttk.Frame(cropper_content_frame)
-        middle_frame.pack(expand=True, fill=tk.BOTH, pady=5)
+        middle_frame.grid(row=1, column=0, sticky='nsew')
+        middle_frame.columnconfigure(0, weight=1)  # Canvas frame expands
+        middle_frame.columnconfigure(1, weight=0)  # Controls have fixed width
+        middle_frame.rowconfigure(0, weight=1)     # Row with canvas expands
 
         # Canvas Frame (Left part of middle_frame)
         canvas_frame = ttk.Frame(middle_frame, relief=tk.SUNKEN, borderwidth=1)
-        canvas_frame.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=(0, 10))
+        canvas_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 10))
+        canvas_frame.columnconfigure(0, weight=1)
+        canvas_frame.rowconfigure(0, weight=1)
         
-        self.crop_canvas = tk.Canvas(canvas_frame, bg='gray75', highlightthickness=0)
-        self.crop_canvas.pack(expand=True, fill=tk.BOTH)
+        # Create a container frame for the canvas with scrollbars
+        canvas_container = ttk.Frame(canvas_frame)
+        canvas_container.pack(expand=True, fill=tk.BOTH)
+        
+        # Add scrollbars
+        y_scroll = ttk.Scrollbar(canvas_container, orient=tk.VERTICAL)
+        x_scroll = ttk.Scrollbar(canvas_container, orient=tk.HORIZONTAL)
+        
+        self.crop_canvas = tk.Canvas(
+            canvas_container,
+            bg='gray75',
+            highlightthickness=0,
+            yscrollcommand=y_scroll.set,
+            xscrollcommand=x_scroll.set
+        )
+        
+        # Configure scrollbars
+        y_scroll.config(command=self.crop_canvas.yview)
+        x_scroll.config(command=self.crop_canvas.xview)
+        
+        # Grid layout for canvas and scrollbars
+        self.crop_canvas.grid(row=0, column=0, sticky='nsew')
+        y_scroll.grid(row=0, column=1, sticky='ns')
+        x_scroll.grid(row=1, column=0, sticky='ew')
+        
+        # Configure grid weights for the container
+        canvas_container.columnconfigure(0, weight=1)
+        canvas_container.rowconfigure(0, weight=1)
+        
+        # Make the canvas frame expand with the window
+        canvas_frame.columnconfigure(0, weight=1)
+        canvas_frame.rowconfigure(0, weight=1)
+        
         # Bind mouse events
         self.crop_canvas.bind("<ButtonPress-1>", self._on_crop_canvas_press)
         self.crop_canvas.bind("<B1-Motion>", self._on_crop_canvas_drag)
         self.crop_canvas.bind("<ButtonRelease-1>", self._on_crop_canvas_release)
         self.crop_canvas.bind("<Motion>", self._on_crop_canvas_motion) # For cursor changes
+        self.crop_canvas.bind("<Configure>", self._on_canvas_configure) # For handling canvas resize
 
         # Controls Frame (Right part of middle_frame)
         controls_frame = ttk.Frame(middle_frame, width=220) 
-        controls_frame.pack(side=tk.RIGHT, fill=tk.Y)
-        controls_frame.pack_propagate(False) 
+        controls_frame.grid(row=0, column=1, sticky='nsew', padx=(0, 5))
+        controls_frame.columnconfigure(0, weight=1)
+        controls_frame.rowconfigure(1, weight=1)  # For the controls frame to fill space
 
         # Cropper Controls Frame (Select, Aspect Ratio, Crop, Save, Undo)
         cropper_controls_frame = ttk.LabelFrame(controls_frame, text="Controls", padding=10)
-        cropper_controls_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10, anchor='nw')
+        cropper_controls_frame.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
+        cropper_controls_frame.columnconfigure(0, weight=1)  # Make controls expand to fill frame
 
         # Select Image Button
         self.select_image_button_crop = ttk.Button(cropper_controls_frame, text="Select Image...", command=self.load_image_for_cropping)
@@ -266,13 +459,15 @@ class ImageManipulatorApp:
             self._reset_cropper_state()
 
     def _display_image_on_crop_canvas(self, image_to_display=None):
-        """Displays or refreshes an image on the main crop canvas.
+        """Display or refresh an image on the main crop canvas.
 
         This method scales and centers the provided `image_to_display` (or
         `self.original_crop_image_pil` if None) onto `self.crop_canvas`.
         The image is resized to fit within the canvas dimensions (or fallback
         to `PREVIEW_MAX_WIDTH`/`HEIGHT` if canvas is not yet sized) while
         maintaining aspect ratio using `Image.Resampling.LANCZOS`.
+        
+        Also updates the scroll region to ensure the entire image is accessible.
         
         Key actions:
         - Stores the scaled Pillow image as `self.display_crop_image_pil`.
@@ -284,8 +479,8 @@ class ImageManipulatorApp:
           the crop area details display to "N/A".
         
         Args:
-            image_to_display (PIL.Image.Image, optional): The Pillow image object
-                to display. Defaults to `self.original_crop_image_pil`.
+            image_to_display: The Pillow image object to display. Defaults to 
+                           `self.original_crop_image_pil`.
         """
         if image_to_display is None:
             image_to_display = self.original_crop_image_pil
@@ -325,6 +520,7 @@ class ImageManipulatorApp:
         self.crop_rect_id = None 
         self.crop_current_rect_coords = None
         self.crop_area_details_var.set("Crop Area (X,Y,W,H): N/A")
+        self.crop_canvas.config(scrollregion=self.crop_canvas.bbox("all"))
 
     def _reset_cropper_state(self):
         """Resets the entire cropper tab to its initial state."""
@@ -854,6 +1050,33 @@ class ImageManipulatorApp:
         else:
             self.crop_button['state'] = tk.DISABLED
 
+    def _on_canvas_configure(self, event=None):
+        """Handle canvas resizing events.
+        
+        This method is called when the canvas is resized. It ensures the image
+        is properly scaled and centered when the window is resized.
+        """
+        if not self.original_crop_image_pil:
+            return
+            
+        # Only redraw if the canvas size has actually changed
+        canvas_width = self.crop_canvas.winfo_width()
+        canvas_height = self.crop_canvas.winfo_height()
+        
+        if canvas_width > 1 and canvas_height > 1:  # Ensure valid canvas size
+            # Store the current crop state
+            had_rect = self.crop_rect_id is not None
+            
+            # Redraw the image
+            self._display_image_on_crop_canvas()
+            
+            # If we had a rectangle before, redraw it with the same aspect ratio
+            if had_rect and self.fixed_aspect_active and self.current_aspect_ratio_val:
+                self._draw_default_fixed_aspect_rectangle()
+            # If we had a rectangle but not fixed aspect, clear it
+            elif had_rect:
+                self._reset_cropper_selection_state(clear_rect_only=True)
+
     def _update_crop_area_details(self):
         if not self.crop_current_rect_coords or not self.display_crop_image_pil:
             self.crop_area_details_var.set("Crop Area (X,Y,W,H): N/A")
@@ -1261,6 +1484,361 @@ class ImageManipulatorApp:
         """
         self.status_bar_text.set(message)
         self.root.update_idletasks() 
+
+    def setup_heic_to_jpg_tab(self):
+        """Sets up the UI for the HEIC to JPG Converter tab."""
+        for widget in self.tab_heic_to_jpg.winfo_children():
+            widget.destroy()
+
+        # Configure grid for the tab
+        self.tab_heic_to_jpg.columnconfigure(0, weight=1)
+        self.tab_heic_to_jpg.rowconfigure(0, weight=1)
+        
+        # Main content frame for the HEIC to JPG tab with grid configuration
+        heic_content_frame = ttk.Frame(self.tab_heic_to_jpg)
+        heic_content_frame.grid(row=0, column=0, sticky='nsew')
+        heic_content_frame.columnconfigure(0, weight=1)
+        heic_content_frame.rowconfigure(1, weight=1)  # Give weight to the middle frame
+
+        # Top: File selection and list clearing
+        top_frame = ttk.Frame(heic_content_frame)
+        top_frame.grid(row=0, column=0, sticky='ew', pady=(0, 10))
+
+        select_files_button = ttk.Button(top_frame, text="Select HEIC/HEIF Files...", command=self._heic_select_files)
+        select_files_button.pack(side=tk.LEFT, padx=(0, 10))
+
+        clear_list_button = ttk.Button(top_frame, text="Clear List", command=self._heic_clear_list)
+        clear_list_button.pack(side=tk.LEFT, padx=(0, 10))
+
+        # Middle: Split view between listbox and preview
+        middle_frame = ttk.PanedWindow(heic_content_frame, orient=tk.HORIZONTAL)
+        middle_frame.grid(row=1, column=0, sticky='nsew', pady=(0,10))
+        
+        # Left side: Listbox frame
+        list_frame = ttk.Frame(middle_frame)
+        middle_frame.add(list_frame, weight=2)
+        
+        # Right side: Preview frame
+        preview_frame = ttk.Frame(middle_frame)
+        middle_frame.add(preview_frame, weight=3)
+        
+        # Listbox for selected files
+        self.heic_listbox = tk.Listbox(list_frame, selectmode=tk.EXTENDED)
+        self.heic_listbox.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=(0,5))
+        self.heic_listbox.bind('<<ListboxSelect>>', self._update_heic_preview)
+        
+        heic_scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.heic_listbox.yview)
+        heic_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.heic_listbox.config(yscrollcommand=heic_scrollbar.set)
+        
+        # Preview area
+        preview_label = ttk.Label(preview_frame, text="Preview", font=('Segoe UI', 10, 'bold'))
+        preview_label.pack(pady=(0, 5))
+        
+        # Canvas for preview with scrollbars
+        preview_canvas_frame = ttk.Frame(preview_frame)
+        preview_canvas_frame.pack(expand=True, fill=tk.BOTH)
+        
+        self.heic_preview_canvas = tk.Canvas(preview_canvas_frame, bg='white', bd=1, relief=tk.SOLID)
+        preview_v_scroll = ttk.Scrollbar(preview_canvas_frame, orient=tk.VERTICAL, command=self.heic_preview_canvas.yview)
+        preview_h_scroll = ttk.Scrollbar(preview_canvas_frame, orient=tk.HORIZONTAL, command=self.heic_preview_canvas.xview)
+        
+        self.heic_preview_canvas.configure(yscrollcommand=preview_v_scroll.set, xscrollcommand=preview_h_scroll.set)
+        
+        preview_v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        preview_h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+        self.heic_preview_canvas.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
+        
+        # Frame inside canvas to hold preview images
+        self.heic_preview_frame = ttk.Frame(self.heic_preview_canvas)
+        self.heic_preview_canvas.create_window((0, 0), window=self.heic_preview_frame, anchor='nw')
+        
+        # Bind canvas to update scroll region
+        self.heic_preview_frame.bind('<Configure>', lambda e: self.heic_preview_canvas.configure(
+            scrollregion=self.heic_preview_canvas.bbox('all')
+        ))
+
+        # Bottom: Controls (Output dir, Quality, Convert)
+        bottom_frame = ttk.Frame(heic_content_frame)
+        bottom_frame.grid(row=2, column=0, sticky='ew', pady=(5,0))
+        
+        output_dir_frame = ttk.Frame(bottom_frame)
+        output_dir_frame.pack(fill=tk.X, pady=(0,5))
+        ttk.Label(output_dir_frame, text="Output Directory:").pack(side=tk.LEFT, padx=(0,5))
+        output_dir_entry = ttk.Entry(output_dir_frame, textvariable=self.heic_output_dir, width=50)
+        output_dir_entry.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0,5))
+        select_output_button = ttk.Button(output_dir_frame, text="Browse...", command=self._heic_select_output_dir)
+        select_output_button.pack(side=tk.LEFT)
+
+        quality_frame = ttk.Frame(bottom_frame)
+        quality_frame.pack(fill=tk.X, pady=(0,10))
+        ttk.Label(quality_frame, text="JPG Quality (1-100):").pack(side=tk.LEFT, padx=(0,5))
+        quality_scale = ttk.Scale(quality_frame, from_=1, to=100, orient=tk.HORIZONTAL, variable=self.heic_quality_var, length=200)
+        quality_scale.pack(side=tk.LEFT, padx=(0,5))
+        quality_label_val = ttk.Label(quality_frame, text=str(self.heic_quality_var.get())) # Initial value
+        quality_label_val.pack(side=tk.LEFT)
+        self.heic_quality_var.trace_add("write", lambda *args: quality_label_val.config(text=f"{self.heic_quality_var.get():.0f}"))
+
+
+        convert_button = ttk.Button(bottom_frame, text="Convert Selected to JPG", command=self._heic_convert_files)
+        convert_button.pack(pady=(5,0))
+
+    def _create_thumbnail(self, image_path, size=(200, 200)):
+        """Create a thumbnail from an image file."""
+        try:
+            img = Image.open(image_path)
+            img.thumbnail(size, Image.Resampling.LANCZOS)
+            
+            # Convert to RGB if necessary (for HEIC with alpha channel)
+            if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'RGBA':
+                    background.paste(img, mask=img.split()[3])  # 3 is the alpha channel
+                else:
+                    background.paste(img, (0, 0), img)
+                img = background
+            
+            photo = ImageTk.PhotoImage(img)
+            return photo
+        except Exception as e:
+            print(f"Error creating thumbnail for {image_path}: {e}")
+            # Return a blank image with error text
+            error_img = Image.new('RGB', size, (240, 240, 240))
+            try:
+                from PIL import ImageDraw, ImageFont
+                draw = ImageDraw.Draw(error_img)
+                # Try to use a default font, fallback to default if not available
+                try:
+                    font = ImageFont.truetype("arial.ttf", 12)
+                except:
+                    font = ImageFont.load_default()
+                text = "Preview not available"
+                text_bbox = draw.textbbox((0, 0), text, font=font)
+                text_width = text_bbox[2] - text_bbox[0]
+                text_height = text_bbox[3] - text_bbox[1]
+                position = ((size[0] - text_width) // 2, (size[1] - text_height) // 2)
+                draw.text(position, text, fill="black", font=font)
+                return ImageTk.PhotoImage(error_img)
+            except:
+                return ImageTk.PhotoImage(error_img)
+
+    def _remove_preview_item(self, file_path):
+        """Remove an item from the preview and file list."""
+        if file_path in self.heic_file_paths:
+            # Find and remove the file path
+            index = self.heic_file_paths.index(file_path)
+            self.heic_file_paths.pop(index)
+            
+            # Update the listbox
+            self.heic_listbox.delete(index)
+            
+            # Update the preview
+            selected_indices = self.heic_listbox.curselection()
+            self._update_heic_preview()
+            
+            # Try to maintain selection
+            if selected_indices:
+                try:
+                    self.heic_listbox.selection_set(selected_indices[0])
+                except:
+                    pass
+            
+            self.status_bar_text.set(f"Removed: {os.path.basename(file_path)}")
+
+    def _update_heic_preview(self, event=None):
+        """Update the preview area with selected thumbnails."""
+        # Clear previous previews
+        for widget in self.heic_preview_frame.winfo_children():
+            widget.destroy()
+        
+        # Clear previous thumbnails to prevent memory leaks
+        self.heic_thumbnails.clear()
+        
+        selected_indices = self.heic_listbox.curselection()
+        if not selected_indices and self.heic_listbox.size() > 0:
+            # If nothing is selected but there are items, select the first one
+            self.heic_listbox.selection_set(0)
+            selected_indices = (0,)
+        
+        if not selected_indices:
+            return
+            
+        # Configure grid for preview items
+        cols = 2  # Number of columns for the grid
+        for i, idx in enumerate(selected_indices):
+            if 0 <= idx < len(self.heic_file_paths):
+                file_path = self.heic_file_paths[idx]
+                
+                # Create a frame for each preview item
+                item_frame = ttk.Frame(self.heic_preview_frame, padding=5, relief='groove', borderwidth=1)
+                item_frame.grid(row=i//cols, column=i%cols, padx=5, pady=5, sticky='nsew')
+                
+                # Create a frame for the header (filename + delete button)
+                header_frame = ttk.Frame(item_frame)
+                header_frame.pack(fill=tk.X, pady=(0, 5))
+                
+                # Display filename
+                filename = os.path.basename(file_path)
+                display_name = filename[:20] + '...' if len(filename) > 25 else filename
+                label_text = ttk.Label(header_frame, text=display_name, wraplength=120, justify='left')
+                label_text.pack(side=tk.LEFT, fill=tk.X, expand=True, anchor='w')
+                
+                # Add delete button
+                delete_btn = ttk.Button(
+                    header_frame, 
+                    text="✕", 
+                    width=2,
+                    command=lambda f=file_path: self._remove_preview_item(f)
+                )
+                delete_btn.pack(side=tk.RIGHT, padx=(5, 0))
+                
+                # Create thumbnail
+                thumbnail = self._create_thumbnail(file_path)
+                if thumbnail:
+                    # Store reference to prevent garbage collection
+                    self.heic_thumbnails[file_path] = thumbnail
+                    
+                    # Display thumbnail
+                    label_img = ttk.Label(item_frame, image=thumbnail)
+                    label_img.pack()
+                    
+                    # Add tooltip with full filename
+                    ToolTip(label_img, text=filename, delay=500)
+        
+        # Configure grid weights
+        rows = (len(selected_indices) + cols - 1) // cols
+        for i in range(rows):
+            self.heic_preview_frame.grid_rowconfigure(i, weight=1)
+        for i in range(cols):
+            self.heic_preview_frame.grid_columnconfigure(i, weight=1)
+        
+        # Update scroll region
+        self.heic_preview_frame.update_idletasks()
+        self.heic_preview_canvas.configure(scrollregion=self.heic_preview_canvas.bbox('all'))
+
+    def _heic_select_files(self):
+        """Select HEIC/HEIF files and add them to the listbox."""
+        filetypes = [("HEIC/HEIF files", "*.heic *.heif"), ("All files", "*.*")]
+        selected_files = filedialog.askopenfilenames(
+            title="Select HEIC/HEIF Files",
+            filetypes=filetypes
+        )
+        if selected_files:
+            for f_path in selected_files:
+                if f_path not in self.heic_file_paths:
+                    self.heic_file_paths.append(f_path)
+                    self.heic_listbox.insert(tk.END, os.path.basename(f_path))
+            self.status_bar_text.set(f"{len(self.heic_file_paths)} file(s) selected.")
+            # Select the newly added files and update preview
+            if len(selected_files) > 0:
+                first_new = len(self.heic_file_paths) - len(selected_files)
+                self.heic_listbox.selection_clear(0, tk.END)
+                for i in range(first_new, len(self.heic_file_paths)):
+                    self.heic_listbox.selection_set(i)
+                self._update_heic_preview()
+        else:
+            self.status_bar_text.set("No files selected.")
+
+    def _heic_select_output_dir(self):
+        """Select the output directory for converted JPG files."""
+        directory = filedialog.askdirectory(
+            title="Select Output Directory",
+            initialdir=self.heic_output_dir.get() # Start from current or previously selected
+        )
+        if directory:
+            self.heic_output_dir.set(directory)
+            self.status_bar_text.set(f"Output directory set to: {directory}")
+
+    def _heic_clear_list(self):
+        """Clear the list of selected HEIC files and the listbox."""
+        self.heic_file_paths.clear()
+        self.heic_listbox.delete(0, tk.END)
+        # Clear preview
+        for widget in self.heic_preview_frame.winfo_children():
+            widget.destroy()
+        self.heic_thumbnails.clear()
+        self.status_bar_text.set("File list cleared.")
+    
+    def _heic_convert_files(self):
+        """Convert selected HEIC/HEIF files to JPG format."""
+        if not self.heic_file_paths:
+            messagebox.showwarning("No Files", "Please select HEIC/HEIF files to convert.")
+            self.status_bar_text.set("Conversion failed: No files selected.")
+            return
+
+        output_dir = self.heic_output_dir.get()
+        if not output_dir or not os.path.isdir(output_dir):
+            messagebox.showerror("Invalid Directory", "Please select a valid output directory.")
+            self.status_bar_text.set("Conversion failed: Invalid output directory.")
+            return
+
+        quality = self.heic_quality_var.get()
+        converted_count = 0
+        error_count = 0
+        error_files = []
+
+        self.status_bar_text.set(f"Starting conversion of {len(self.heic_file_paths)} files...")
+        self.root.update_idletasks() # Update UI to show starting message
+
+        for i, file_path in enumerate(self.heic_file_paths):
+            base_name = os.path.splitext(os.path.basename(file_path))[0]
+            output_jpg_path = os.path.join(output_dir, base_name + ".jpg")
+            self.status_bar_text.set(f"Converting ({i+1}/{len(self.heic_file_paths)}): {os.path.basename(file_path)}...")
+            self.root.update_idletasks()
+
+            try:
+                # Pillow uses pillow-heif automatically if registered
+                img = Image.open(file_path)
+
+                # Handle alpha channel for JPG conversion
+                if img.mode == 'RGBA' or img.mode == 'PA' or (isinstance(img.info.get('icc_profile'), bytes) and b'CMYK' in img.info.get('icc_profile')):
+                    # If RGBA or PA, paste on a white background
+                    # Some HEIC might also be CMYK, which JPG supports, but transparency needs handling
+                    if img.mode == 'RGBA' or img.mode == 'PA':
+                        background = Image.new('RGB', img.size, (255, 255, 255))
+                        # The mask is the alpha channel itself
+                        try:
+                            mask = img.split()[-1] # Get the alpha channel
+                            if mask.mode != 'L': # Ensure mask is 'L' mode
+                                mask = mask.convert('L')
+                            background.paste(img, (0,0), mask=mask)
+                            img = background
+                        except IndexError: # In case split doesn't return enough channels (e.g. for 'P' with alpha in palette)
+                            # Fallback for images like 'P' mode with transparency
+                            img = img.convert("RGBA")
+                            mask = img.split()[-1]
+                            if mask.mode != 'L': 
+                                mask = mask.convert('L')
+                            background.paste(img, (0,0), mask=mask)
+                            img = background
+
+                # Ensure final image is RGB for JPG saving
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+
+                img.save(output_jpg_path, "JPEG", quality=quality, optimize=True)
+                converted_count += 1
+            except UnidentifiedImageError:
+                error_files.append(f"{os.path.basename(file_path)} (Unrecognized format or not an image)")
+                error_count += 1
+            except FileNotFoundError:
+                error_files.append(f"{os.path.basename(file_path)} (File not found during conversion)")
+                error_count += 1
+            except Exception as e:
+                error_files.append(f"{os.path.basename(file_path)} ({type(e).__name__}: {e})")
+                error_count += 1
+                print(f"Error converting {file_path}: {e}") # Log to console for debugging
+
+        final_message = f"{converted_count} file(s) converted successfully."
+        if error_count > 0:
+            final_message += f" {error_count} file(s) failed."
+            messagebox.showerror("Conversion Errors", 
+                                 f"{error_count} file(s) failed to convert:\n\n" + "\n".join(error_files) + 
+                                 "\n\nSee console for detailed error messages if any.")
+        else:
+            messagebox.showinfo("Conversion Complete", final_message)
+        
+        self.status_bar_text.set(final_message)
 
 if __name__ == "__main__":
     root = tk.Tk()
