@@ -1,7 +1,8 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QSizePolicy
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
+from PyQt5.QtCore import Qt
 
 # Import the actual tools
 from resizer_tool import ResizerTool
@@ -13,17 +14,20 @@ class ImageToolTab(QWidget):
         self.tool_name = tool_name
         layout = QVBoxLayout()
         self.label = QLabel(f"{tool_name} Tool - Under Construction")
-        layout.addWidget(self.label)
+        self.label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.label, stretch=1)
         self.setLayout(layout)
 
 class ImageMasterApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Image Master")
-        self.setGeometry(100, 100, 900, 700)
+        self.setMinimumSize(600, 400)  # Set minimum window size
         
         # Create tabs
         self.tabs = QTabWidget()
+        self.tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setCentralWidget(self.tabs)
         
         # Add tools
@@ -44,8 +48,12 @@ class ImageMasterApp(QMainWindow):
     def add_placeholder_tab(self, tab_name, tool_name):
         """Add placeholder tabs for tools not yet implemented"""
         tab = QWidget()
+        tab.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout = QVBoxLayout()
-        layout.addWidget(QLabel(f"{tool_name} - Coming Soon"))
+        label = QLabel(f"{tool_name} - Coming Soon")
+        label.setAlignment(Qt.AlignCenter)
+        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        layout.addWidget(label, stretch=1)
         tab.setLayout(layout)
         self.tabs.addTab(tab, tab_name)
 

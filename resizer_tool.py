@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                             QPushButton, QFileDialog, QSpinBox, QCheckBox,
-                            QGroupBox, QProgressBar, QScrollArea, QGridLayout)
+                            QGroupBox, QProgressBar, QScrollArea, QGridLayout,
+                            QSizePolicy)
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QImage
 from PIL import Image
@@ -11,6 +12,7 @@ class ThumbnailLabel(QLabel):
         super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
         self.setMinimumSize(120, 120)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setStyleSheet("""
             border: 1px solid #ddd;
             margin: 2px;
@@ -20,6 +22,7 @@ class ThumbnailLabel(QLabel):
 class ResizerTool(QWidget):
     def __init__(self):
         super().__init__()
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.image_paths = []
         self.current_preview = None
         self.current_path = None
@@ -27,26 +30,31 @@ class ResizerTool(QWidget):
     
     def init_ui(self):
         main_layout = QHBoxLayout()
+        main_layout.setContentsMargins(5, 5, 5, 5)
         
         # Left panel - Preview
         preview_group = QGroupBox("Preview Gallery")
+        preview_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         preview_layout = QVBoxLayout()
         
         # Thumbnail scroll area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         self.thumbnail_container = QWidget()
+        self.thumbnail_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.thumbnail_layout = QGridLayout()
+        self.thumbnail_layout.setSpacing(5)
         self.thumbnail_container.setLayout(self.thumbnail_layout)
         scroll.setWidget(self.thumbnail_container)
-        preview_layout.addWidget(scroll)
+        preview_layout.addWidget(scroll, stretch=1)
         
         # Main preview
         self.main_preview = QLabel()
         self.main_preview.setAlignment(Qt.AlignCenter)
         self.main_preview.setMinimumSize(400, 300)
+        self.main_preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         preview_layout.addWidget(QLabel("Selected Preview:"))
-        preview_layout.addWidget(self.main_preview)
+        preview_layout.addWidget(self.main_preview, stretch=2)
         
         # Add info labels below main preview
         self.size_info = QLabel()
@@ -64,6 +72,7 @@ class ResizerTool(QWidget):
         
         # Right panel - Controls
         control_group = QGroupBox("Controls")
+        control_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         control_layout = QVBoxLayout()
         
         # File selection
