@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 ### Added
+- Base64 output download options:
+  - Added format selection (TXT, JSON, HTML)
+  - Download button to save Base64 output in selected format
+  - JSON output includes metadata (filename, timestamp, mime type)
+  - HTML output generates an image tag with embedded Base64
+  - Copy to clipboard respects selected format
 - Output format selection in Resizer tool
   - Added dropdown menu for JPEG, PNG, and WebP formats
   - Automatic format conversion during image saving
