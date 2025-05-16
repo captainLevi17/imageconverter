@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 ### Added
+- Output format selection in Resizer tool
+  - Added dropdown menu for JPEG, PNG, and WebP formats
+  - Automatic format conversion during image saving
+  - Proper handling of format-specific settings (quality, color modes)
 - Complete Base64 Converter tool implementation
   - Image to Base64 encoding
   - Base64 to image decoding

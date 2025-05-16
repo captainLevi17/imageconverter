@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                             QPushButton, QFileDialog, QSpinBox, QCheckBox,
                             QGroupBox, QProgressBar, QScrollArea, QGridLayout,
-                            QSizePolicy)
+                            QSizePolicy, QComboBox)
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QImage
 from PIL import Image
@@ -86,6 +86,15 @@ class ResizerTool(QWidget):
         file_btn_layout.addWidget(browse_btn)
         file_btn_layout.addWidget(clear_btn)
         
+        # Output format selection
+        format_layout = QHBoxLayout()
+        format_layout.addWidget(QLabel("Output Format:"))
+        self.format_combo = QComboBox()
+        self.format_combo.addItems(["JPEG", "PNG", "WebP"])
+        self.format_combo.setCurrentIndex(0)  # Default to JPEG
+        format_layout.addWidget(self.format_combo)
+        control_layout.addLayout(format_layout)
+
         # Output directory
         self.output_dir_btn = QPushButton("Select Output Directory")
         self.output_dir_btn.clicked.connect(self.select_output_dir)
