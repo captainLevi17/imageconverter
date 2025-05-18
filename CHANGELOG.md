@@ -1,6 +1,17 @@
 # Changelog
 
-## [Unreleased]
+## [Unreleased] - 2025-05-18
+### Fixed
+- Resolved layout issues in Resizer tool
+- Fixed Base64 tool button initialization
+- Addressed QLayout warning messages
+- Improved error handling in image processing
+- Removed temporary development files
+
+### Changed
+- Cleaned up and optimized code structure
+- Improved UI consistency across tools
+- Enhanced error messages and user feedback
 ### Added
 - Base64 output download options:
   - Added format selection (TXT, JSON, HTML)
