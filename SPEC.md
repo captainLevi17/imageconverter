@@ -17,10 +17,11 @@ Image Master is a desktop application built with Python designed for image manip
   - OpenCV (cropping, background removal)
   - rembg (AI background removal)
   - piexif (EXIF data handling)
+  - pillow-heif (HEIC/HEIF support)
 
 ## Application Modules
 1. **Home Dashboard**
-2. **HEIC to JPG Converter** (optional)
+2. **HEIC to JPG/PNG Converter**
 3. **Image Resizer**
 4. **Image Compressor**
 5. **Image Cropper**
@@ -29,7 +30,7 @@ Image Master is a desktop application built with Python designed for image manip
 8. **Image Background Remover**
 
 ## Supported File Types
-Input: JPG, PNG, BMP, TIFF, WebP
+Input: JPG, PNG, BMP, TIFF, WebP, HEIC/HEIF
 Output: JPG, PNG, WebP, Base64
 
 ## Batch Processing

@@ -4,9 +4,27 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QTabWidget, QSizePolicy,
 from PyQt5.QtGui import QIcon, QFont, QPalette, QColor
 from PyQt5.QtCore import Qt, QSize
 
+# Create QApplication first
+app = QApplication.instance()
+if app is None:
+    app = QApplication(sys.argv)
+
 # Import the actual tools
 from resizer_tool import ResizerTool
 from base64_tool import Base64Tool
+
+# Initialize HEIC support flag
+HEIC_SUPPORT = False
+
+# Import HEIC tool only after QApplication is created
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+    from heic_tool import HEICConverterTool
+    HEIC_SUPPORT = True
+except ImportError:
+    print("Warning: HEIC support is not available. Install pillow-heif for HEIC support.")
+    HEIC_SUPPORT = False
 
 class ImageToolTab(QWidget):
     def __init__(self, tool_name):
@@ -116,9 +134,16 @@ class ImageMasterApp(QMainWindow):
         self.tabs.addTab(self.resizer_tool, QIcon(), "Resizer")
         self.tabs.addTab(self.base64_tool, QIcon(), "Base64")
         
+        # Add HEIC converter tool if available
+        if HEIC_SUPPORT:
+            try:
+                self.heic_tool = HEICConverterTool()
+                self.tabs.addTab(self.heic_tool, QIcon(), "HEIC to JPG")
+            except Exception as e:
+                print(f"Error initializing HEIC tool: {e}")
+        
         # Add placeholder tabs for other tools
         self.add_placeholder_tab("Dashboard", "Home Dashboard")
-        self.add_placeholder_tab("HEIC", "HEIC to JPG")
         self.add_placeholder_tab("Compressor", "Image Compressor")
         self.add_placeholder_tab("Cropper", "Image Cropper")
         self.add_placeholder_tab("WebP", "WebP Converter")
@@ -185,7 +210,7 @@ class ImageMasterApp(QMainWindow):
         self.tabs.addTab(tab, tab_name)
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
+    # The QApplication is already created at the top level
     window = ImageMasterApp()
     window.show()
     sys.exit(app.exec_())

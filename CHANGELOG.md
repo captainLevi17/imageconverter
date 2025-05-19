@@ -1,6 +1,39 @@
 # Changelog
 
-## [Unreleased] - 2025-05-18
+## [Unreleased] - 2025-05-20
+### Added
+- Added comprehensive preset categories to Image Resizer:
+  - Common presets (800x600, 1280x720, 1920x1080, 2K, 4K)
+  - Social Media presets (Instagram, Facebook, Twitter, LinkedIn)
+  - Device-specific presets (iPhone, iPad, MacBook, 4K/8K monitors)
+- Organized presets into collapsible group boxes for better usability
+
+### Fixed
+- Fixed QApplication import issue in HEIC converter
+- Resolved duplicate method definitions in HEIC tool
+- Improved error handling for HEIC image loading
+- Fixed thumbnail generation and preview functionality
+- Addressed UI responsiveness during conversion
+
+### Changed
+- Optimized HEIC image conversion process
+- Improved error messages and user feedback
+- Enhanced thumbnail grid layout
+
+### Added
+- HEIC to JPG/PNG conversion
+- Thumbnail preview gallery
+- Output quality settings (60-100%)
+  - Maximum (100%)
+  - High (90%)
+  - Good (80%)
+  - Medium (70%)
+  - Low (60%)
+- Output format selection (JPEG/PNG)
+- Custom output directory selection
+- Progress tracking during conversion
+
+## [0.3.0] - 2025-05-19
 ### Fixed
 - Resolved layout issues in Resizer tool
 - Fixed Base64 tool button initialization

@@ -130,17 +130,60 @@ class ResizerTool(QWidget):
         control_layout.addWidget(self.allow_enlarge)
         
         # Presets
-        presets_layout = QHBoxLayout()
-        presets = [
-            ("Small (800x600)", 800, 600),
-            ("Medium (1280x720)", 1280, 720),
-            ("HD (1920x1080)", 1920, 1080)
-        ]
+        presets_layout = QVBoxLayout()
         
-        for text, w, h in presets:
+        # Common presets group
+        common_group = QGroupBox("Common")
+        common_layout = QHBoxLayout()
+        presets_common = [
+            ("Small (800x600)", 800, 600),
+            ("HD (1280x720)", 1280, 720),
+            ("Full HD (1920x1080)", 1920, 1080),
+            ("2K (2560x1440)", 2560, 1440),
+            ("4K (3840x2160)", 3840, 2160)
+        ]
+        for text, w, h in presets_common:
             btn = QPushButton(text)
             btn.clicked.connect(lambda _, w=w, h=h: self.set_preset(w, h))
-            presets_layout.addWidget(btn)
+            common_layout.addWidget(btn)
+        common_group.setLayout(common_layout)
+        
+        # Social Media presets group
+        social_group = QGroupBox("Social Media")
+        social_layout = QHBoxLayout()
+        presets_social = [
+            ("Instagram Post (1080x1080)", 1080, 1080),
+            ("Instagram Story (1080x1920)", 1080, 1920),
+            ("Facebook Post (1200x630)", 1200, 630),
+            ("Twitter Header (1500x500)", 1500, 500),
+            ("LinkedIn Post (1200x627)", 1200, 627)
+        ]
+        for text, w, h in presets_social:
+            btn = QPushButton(text)
+            btn.clicked.connect(lambda _, w=w, h=h: self.set_preset(w, h))
+            social_layout.addWidget(btn)
+        social_group.setLayout(social_layout)
+        
+        # Device presets group
+        device_group = QGroupBox("Devices")
+        device_layout = QHBoxLayout()
+        presets_devices = [
+            ("iPhone 15 (1179x2556)", 1179, 2556),
+            ("iPad Pro (2048x2732)", 2048, 2732),
+            ("MacBook Pro 16\" (3072x1920)", 3072, 1920),
+            ("4K Monitor (3840x2160)", 3840, 2160),
+            ("8K Monitor (7680x4320)", 7680, 4320)
+        ]
+        for text, w, h in presets_devices:
+            btn = QPushButton(text)
+            btn.clicked.connect(lambda _, w=w, h=h: self.set_preset(w, h))
+            device_layout.addWidget(btn)
+        device_group.setLayout(device_layout)
+        
+        # Add all groups to main presets layout
+        presets_layout.addWidget(common_group)
+        presets_layout.addWidget(social_group)
+        presets_layout.addWidget(device_group)
         
         # Progress bar
         self.progress_bar = QProgressBar()
