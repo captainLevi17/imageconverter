@@ -37,6 +37,8 @@ A Python desktop application for image manipulation with PyQt5.
 - Convert images to Base64 encoded strings
 - Convert Base64 encoded strings to images
 - Support for various image formats (e.g. JPEG, PNG, GIF, HEIC)
+- Copy as HTML snippet with one click
+- Multiple output formats: Plain Text, JSON, HTML
 
 ## Installation
 

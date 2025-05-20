@@ -196,10 +196,23 @@ class Base64Tool(QWidget):
         
         button_layout.addStretch()
         
-        # Copy button
+        # Copy buttons container
+        copy_buttons_container = QHBoxLayout()
+        copy_buttons_container.setSpacing(8)
+        
+        # Copy to Clipboard button
         copy_btn = QPushButton("Copy to Clipboard")
         copy_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_DialogSaveButton')))
         copy_btn.clicked.connect(self.copy_to_clipboard)
+        
+        # Copy HTML Snippet button
+        copy_html_btn = QPushButton("Copy HTML Snippet")
+        copy_html_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_DialogSaveButton')))
+        copy_html_btn.clicked.connect(self.copy_html_snippet)
+        
+        # Add copy buttons to container
+        copy_buttons_container.addWidget(copy_btn)
+        copy_buttons_container.addWidget(copy_html_btn)
         
         # Download button
         download_btn = QPushButton("Download")
@@ -207,7 +220,8 @@ class Base64Tool(QWidget):
         download_btn.clicked.connect(self.download_base64)
         
         # Add buttons with stretch
-        button_layout.addWidget(copy_btn)
+        button_layout.addLayout(copy_buttons_container)
+        button_layout.addStretch()
         button_layout.addWidget(download_btn)
         
         img_to_b64_layout.addLayout(button_layout)
@@ -476,6 +490,30 @@ class Base64Tool(QWidget):
         clipboard = QApplication.clipboard()
         clipboard.setText(formatted_output)
         self.show_message("Success", "Content copied to clipboard", QMessageBox.Information)
+        
+    def copy_html_snippet(self):
+        """Copy the base64 data as an HTML img tag to clipboard"""
+        if not hasattr(self, 'current_image') or not self.current_image:
+            self.show_message("Error", "No image loaded", QMessageBox.Warning)
+            return
+            
+        # Get the base64 string (without any formatting)
+        base64_str = self.b64_output.toPlainText()
+        if not base64_str:
+            self.show_message("Error", "No base64 data available", QMessageBox.Warning)
+            return
+            
+        # Create HTML img tag
+        mime_type = f"image/{os.path.splitext(self.current_image)[1][1:].lower()}"
+        if mime_type == "image/jpg":
+            mime_type = "image/jpeg"
+            
+        html_snippet = f'<img src="data:{mime_type};base64,{base64_str}" alt="Base64 encoded image">'
+        
+        # Copy to clipboard
+        clipboard = QApplication.clipboard()
+        clipboard.setText(html_snippet)
+        self.show_message("Success", "HTML snippet copied to clipboard", QMessageBox.Information)
         
     def show_message(self, title, message, icon=QMessageBox.Information):
         msg = QMessageBox()

@@ -2,6 +2,7 @@
 
 ## [Unreleased] - 2025-05-20
 ### Added
+- Added "Copy HTML Snippet" button to Base64 tool for quick HTML image tag generation
 - Added comprehensive preset categories to Image Resizer:
   - Common presets (800x600, 1280x720, 1920x1080, 2K, 4K)
   - Social Media presets (Instagram, Facebook, Twitter, LinkedIn)

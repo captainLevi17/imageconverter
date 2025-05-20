@@ -26,6 +26,10 @@ Image Master is a desktop application built with Python designed for image manip
 4. **Image Compressor**
 5. **Image Cropper**
 6. **Image to Base64 Converter**
+   - Convert between images and Base64 strings
+   - Copy as HTML snippet with one click
+   - Multiple output formats (TXT, JSON, HTML)
+   - Support for all major image formats
 7. **WebP Converter**
 8. **Image Background Remover**
 
