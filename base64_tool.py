@@ -27,50 +27,7 @@ class Base64Tool(QWidget):
     def init_ui(self):
         # Main layout
         main_widget = QWidget()
-        main_widget.setStyleSheet("""
-            QWidget {
-                background: white;
-                border-radius: 8px;
-            }
-            QLabel {
-                color: #2d3748;
-                font-size: 14px;
-            }
-            QPushButton {
-                background-color: #3182ce;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-weight: 500;
-                min-height: 36px;
-            }
-            QPushButton:hover {
-                background-color: #2c5282;
-            }
-            QPushButton:disabled {
-                background-color: #a0aec0;
-            }
-            QTextEdit, QComboBox {
-                border: 1px solid #e2e8f0;
-                border-radius: 6px;
-                padding: 8px;
-                font-family: 'Segoe UI', Arial, sans-serif;
-                font-size: 13px;
-            }
-            QTextEdit:focus, QComboBox:focus {
-                border: 1px solid #3182ce;
-                outline: none;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QLabel[preview=true] {
-                border: 1px solid #e2e8f0;
-                border-radius: 6px;
-                background: #f8fafc;
-            }
-        """)
+        main_widget.setObjectName("base64ToolWidget")
         
         layout = QVBoxLayout(main_widget)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -78,22 +35,7 @@ class Base64Tool(QWidget):
         
         # Image to Base64 section
         img_to_b64_group = QGroupBox("Image to Base64")
-        img_to_b64_group.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid #e2e8f0;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 12px;
-                font-weight: 500;
-                color: #2d3748;
-                font-size: 15px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 6px;
-            }
-        """)
+        img_to_b64_group.setObjectName("imgToB64Group")
         img_to_b64_layout = QVBoxLayout(img_to_b64_group)
         img_to_b64_layout.setSpacing(12)
         img_to_b64_layout.setContentsMargins(12, 12, 12, 12)
@@ -103,19 +45,12 @@ class Base64Tool(QWidget):
         
         # Add a frame for the path display
         path_frame = QFrame()
-        path_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f8fafc;
-                border: 1px solid #e2e8f0;
-                border-radius: 6px;
-                padding: 8px 12px;
-            }
-        """)
+        path_frame.setObjectName("pathFrame")
         path_layout = QHBoxLayout(path_frame)
         path_layout.setContentsMargins(0, 0, 0, 0)
         
         self.img_path_label = QLabel("No image selected")
-        self.img_path_label.setStyleSheet("color: #4a5568;")
+        self.img_path_label.setObjectName("imgPathLabel")
         self.img_path_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         
         browse_btn = QPushButton("Browse Image")
@@ -131,6 +66,7 @@ class Base64Tool(QWidget):
         
         # Image preview
         self.img_preview = QLabel()
+        self.img_preview.setObjectName("imgPreview")
         self.img_preview.setProperty("preview", True)
         self.img_preview.setAlignment(Qt.AlignCenter)
         self.img_preview.setMinimumSize(300, 200)
@@ -139,39 +75,15 @@ class Base64Tool(QWidget):
         
         # Base64 output
         output_group = QGroupBox("Base64 Output")
-        output_group.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid #e2e8f0;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 12px;
-                font-weight: 500;
-                color: #2d3748;
-                font-size: 15px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 6px;
-            }
-        """)
+        output_group.setObjectName("outputGroup")
         output_layout = QVBoxLayout(output_group)
         output_layout.setContentsMargins(0, 12, 0, 0)
         
         self.b64_output = QTextEdit()
-        self.b64_output.setPlaceholderText("Base64 encoded string will appear here")
+        self.b64_output.setObjectName("base64Output")
         self.b64_output.setReadOnly(True)
+        self.b64_output.setPlaceholderText("Base64 encoded string will appear here")
         self.b64_output.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.b64_output.setStyleSheet("""
-            QTextEdit {
-                border: none;
-                border-top: 1px solid #e2e8f0;
-                border-radius: 0 0 6px 6px;
-                background: #f8fafc;
-                font-family: 'Consolas', 'Monaco', monospace;
-                font-size: 12px;
-            }
-        """)
         
         output_layout.addWidget(self.b64_output)
         img_to_b64_layout.addWidget(output_group, stretch=2)
@@ -182,16 +94,12 @@ class Base64Tool(QWidget):
         
         # Format selection
         format_label = QLabel("Output Format:")
-        format_label.setStyleSheet("color: #4a5568;")
+        format_label.setObjectName("formatLabel")
         button_layout.addWidget(format_label)
         
         self.format_combo = QComboBox()
         self.format_combo.addItems(["TXT (Plain Text)", "JSON", "HTML"])
-        self.format_combo.setStyleSheet("""
-            QComboBox {
-                min-width: 150px;
-            }
-        """)
+        self.format_combo.setObjectName("formatCombo")
         button_layout.addWidget(self.format_combo)
         
         button_layout.addStretch()
@@ -232,65 +140,26 @@ class Base64Tool(QWidget):
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setFrameShadow(QFrame.Sunken)
-        separator.setStyleSheet("color: #e2e8f0;")
+        separator.setObjectName("separator")
         layout.addWidget(separator)
         
         # Base64 to Image section
         b64_to_img_group = QGroupBox("Base64 to Image")
-        b64_to_img_group.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid #e2e8f0;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 12px;
-                font-weight: 500;
-                color: #2d3748;
-                font-size: 15px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 6px;
-            }
-        """)
+        b64_to_img_group.setObjectName("b64ToImgGroup")
         b64_to_img_layout = QVBoxLayout(b64_to_img_group)
         b64_to_img_layout.setSpacing(12)
         b64_to_img_layout.setContentsMargins(12, 12, 12, 12)
         
         # Base64 input
         input_group = QGroupBox("Base64 Input")
-        input_group.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid #e2e8f0;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 12px;
-                font-weight: 500;
-                color: #2d3748;
-                font-size: 15px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 6px;
-            }
-        """)
+        input_group.setObjectName("inputGroup")
         input_layout = QVBoxLayout(input_group)
         input_layout.setContentsMargins(0, 12, 0, 0)
         
         self.b64_input = QTextEdit()
+        self.b64_input.setObjectName("base64Input")
         self.b64_input.setPlaceholderText("Paste Base64 encoded string here")
         self.b64_input.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.b64_input.setStyleSheet("""
-            QTextEdit {
-                border: none;
-                border-top: 1px solid #e2e8f0;
-                border-radius: 0 0 6px 6px;
-                background: #f8fafc;
-                font-family: 'Consolas', 'Monaco', monospace;
-                font-size: 12px;
-            }
-        """)
         
         input_layout.addWidget(self.b64_input)
         b64_to_img_layout.addWidget(input_group, stretch=2)
@@ -308,26 +177,12 @@ class Base64Tool(QWidget):
         
         # Decoded image preview
         preview_group = QGroupBox("Preview")
-        preview_group.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid #e2e8f0;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 12px;
-                font-weight: 500;
-                color: #2d3748;
-                font-size: 15px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 12px;
-                padding: 0 6px;
-            }
-        """)
+        preview_group.setObjectName("previewGroup")
         preview_layout = QVBoxLayout(preview_group)
         preview_layout.setContentsMargins(0, 12, 0, 0)
         
         self.decoded_preview = QLabel()
+        self.decoded_preview.setObjectName("decodedPreview")
         self.decoded_preview.setProperty("preview", True)
         self.decoded_preview.setAlignment(Qt.AlignCenter)
         self.decoded_preview.setMinimumSize(300, 200)
