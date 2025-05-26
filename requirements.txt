@@ -1,3 +1,4 @@
+# Main dependencies
 PyQt5>=5.15.9
 Pillow>=10.1.0
 opencv-python>=4.9.0.80
@@ -6,6 +7,18 @@ imageio>=2.34.0
 piexif>=1.1.3
 pyheif>=0.7.0
 pillow-heif>=0.10.0
+
+# Testing dependencies
+pytest>=7.4.0
+pytest-qt>=4.2.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+pytest-xvfb>=2.0.0  # For headless GUI testing
+
+# Development tools
+black>=23.3.0
+flake8>=6.0.0
+mypy>=1.3.0
 
 # Note: For HEIC support on Windows, you may need to install the libheif library
 # Download from: https://github.com/strukturag/libheif/releases
