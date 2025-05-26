@@ -12,6 +12,8 @@ if app is None:
 # Import the actual tools
 from resizer_tool import ResizerTool
 from base64_tool import Base64Tool
+from compressor_tool import CompressorTool
+from webp_tool import WebPConverterTool
 
 # Initialize HEIC support flag
 HEIC_SUPPORT = False
@@ -127,26 +129,22 @@ class ImageMasterApp(QMainWindow):
         self.tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.tabs.setDocumentMode(True)
         
-        # Add tools
-        self.resizer_tool = ResizerTool()
-        self.base64_tool = Base64Tool()
+        # Add tools to tabs
+        self.tabs.addTab(ResizerTool(), "Resizer")
+        self.tabs.addTab(CompressorTool(), "Compressor")
+        self.tabs.addTab(WebPConverterTool(), "WebP Converter")
+        self.tabs.addTab(Base64Tool(), "Base64")
         
-        self.tabs.addTab(self.resizer_tool, QIcon(), "Resizer")
-        self.tabs.addTab(self.base64_tool, QIcon(), "Base64")
-        
-        # Add HEIC converter tool if available
+        # Add HEIC converter if supported
         if HEIC_SUPPORT:
             try:
-                self.heic_tool = HEICConverterTool()
-                self.tabs.addTab(self.heic_tool, QIcon(), "HEIC to JPG")
+                self.tabs.addTab(HEICConverterTool(), "HEIC to JPG")
             except Exception as e:
                 print(f"Error initializing HEIC tool: {e}")
         
         # Add placeholder tabs for other tools
         self.add_placeholder_tab("Dashboard", "Home Dashboard")
-        self.add_placeholder_tab("Compressor", "Image Compressor")
         self.add_placeholder_tab("Cropper", "Image Cropper")
-        self.add_placeholder_tab("WebP", "WebP Converter")
         self.add_placeholder_tab("BG Remover", "Background Remover")
         
         # Add widgets to main layout

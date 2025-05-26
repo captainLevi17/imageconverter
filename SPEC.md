@@ -24,7 +24,15 @@ Image Master is a desktop application built with Python designed for image manip
 2. **HEIC to JPG/PNG Converter**
 3. **Image Resizer**
 4. **Image Compressor**
-5. **Image Cropper**
+   - Batch processing of multiple images
+   - Real-time preview of compression results
+   - Adjustable quality settings (1-100%)
+   - Support for multiple output formats (JPEG, PNG, WebP)
+   - Thumbnail gallery for easy selection
+   - File size comparison between original and compressed
+   - Preserve metadata option
+   - Custom output directory selection
+5. **Image Cropper"
 6. **Image to Base64 Converter**
    - Convert between images and Base64 strings
    - Copy as HTML snippet with one click
@@ -38,7 +46,7 @@ Input: JPG, PNG, BMP, TIFF, WebP, HEIC/HEIF
 Output: JPG, PNG, WebP, Base64
 
 ## Batch Processing
-All major functions support batch operations
+All major functions support batch operations with progress tracking and real-time feedback
 
 ## Full Specification
 [Original detailed spec would be maintained here]

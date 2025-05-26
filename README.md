@@ -4,6 +4,16 @@ A Python desktop application for image manipulation with PyQt5.
 
 ## Features
 
+### Image Compressor Tool
+- Batch process multiple images
+- Preview before and after compression
+- Adjustable quality settings (1-100%)
+- Support for multiple output formats (JPEG, PNG, WebP)
+- Thumbnail gallery for easy selection
+- Visual comparison of original and compressed sizes
+- Custom output directory selection
+- Preserve image metadata option
+
 ### Image Resizer Tool
 - Batch process multiple images
 - **Preset Sizes**:

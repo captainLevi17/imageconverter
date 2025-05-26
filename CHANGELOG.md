@@ -1,6 +1,17 @@
 # Changelog
 
-## [Unreleased] - 2025-05-20
+## [Unreleased] - 2025-05-26
+### Added
+- Added new Image Compressor Tool with preview functionality
+- Implemented thumbnail gallery for image selection
+- Added real-time compression preview
+- Support for JPEG, PNG, and WebP output formats
+- Added quality adjustment slider (1-100%)
+- Included file size comparison in preview
+- Added preserve metadata option
+- Implemented custom output directory selection
+
+## [0.4.0] - 2025-05-20
 ### Added
 - Added "Copy HTML Snippet" button to Base64 tool for quick HTML image tag generation
 - Added comprehensive preset categories to Image Resizer:
