@@ -39,6 +39,15 @@ Image Master is a desktop application built with Python designed for image manip
    - Multiple output formats (TXT, JSON, HTML)
    - Support for all major image formats
 7. **WebP Converter**
+   - Convert between WebP and other formats (JPG, PNG)
+   - Thumbnail gallery for easy image selection
+   - Real-time preview of selected images
+   - Adjustable quality settings (1-100%)
+   - Lossless compression option
+   - Preserve metadata option
+   - Custom output directory selection
+   - Batch processing support
+   - Image information display (dimensions, file size, format)
 8. **Image Background Remover**
 
 ## Supported File Types

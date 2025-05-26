@@ -4,8 +4,23 @@ from PIL import Image, ImageFile
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
                            QFileDialog, QSpinBox, QComboBox, QCheckBox, QProgressBar,
                            QMessageBox, QGroupBox, QSizePolicy, QSpacerItem, QRadioButton,
-                           QButtonGroup)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+                           QButtonGroup, QScrollArea, QGridLayout)
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize
+from PyQt5.QtGui import QPixmap, QImage
+
+class ThumbnailLabel(QLabel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAlignment(Qt.AlignCenter)
+        self.setMinimumSize(80, 80)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setStyleSheet("""
+            border: 1px solid #ddd;
+            margin: 2px;
+            padding: 2px;
+        """)
+        self.setScaledContents(True)
+
 
 class WebPConverterTool(QWidget):
     def __init__(self, parent=None):
@@ -14,6 +29,8 @@ class WebPConverterTool(QWidget):
         # Initialize instance variables
         self.input_files = []
         self.output_dir = str(Path.home() / "Pictures" / "WebP_Converted")
+        self.current_preview = None
+        self.current_path = None
         
         # Try to create the output directory
         try:
@@ -36,19 +53,69 @@ class WebPConverterTool(QWidget):
         self.setup_ui()
     
     def setup_ui(self):
-        layout = QVBoxLayout()
-        layout.setSpacing(15)
+        main_layout = QHBoxLayout()
+        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Left panel - Preview
+        preview_group = QGroupBox("Preview Gallery")
+        preview_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        preview_layout = QVBoxLayout()
+        
+        # Thumbnail scroll area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        self.thumbnail_container = QWidget()
+        self.thumbnail_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.thumbnail_layout = QGridLayout()
+        self.thumbnail_layout.setSpacing(5)
+        self.thumbnail_container.setLayout(self.thumbnail_layout)
+        scroll.setWidget(self.thumbnail_container)
+        preview_layout.addWidget(scroll, stretch=1)
+        
+        # Main preview
+        self.main_preview = QLabel()
+        self.main_preview.setAlignment(Qt.AlignCenter)
+        self.main_preview.setMinimumSize(300, 250)
+        self.main_preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        preview_layout.addWidget(QLabel("Selected Preview:"))
+        preview_layout.addWidget(self.main_preview, stretch=2)
+        
+        # Add info labels below main preview
+        self.size_info = QLabel()
+        self.size_info.setAlignment(Qt.AlignCenter)
+        self.size_info.setStyleSheet("font-size: 10px; color: #555;")
+        preview_layout.addWidget(self.size_info)
+        
+        # Add format info
+        self.format_info = QLabel()
+        self.format_info.setAlignment(Qt.AlignCenter)
+        self.format_info.setStyleSheet("font-size: 10px; color: #777;")
+        preview_layout.addWidget(self.format_info)
+        
+        preview_group.setLayout(preview_layout)
+        
+        # Right panel - Controls
+        control_group = QGroupBox("Controls")
+        control_layout = QVBoxLayout()
         
         # Input selection
         input_group = QGroupBox("Input")
         input_layout = QVBoxLayout()
         
+        btn_layout = QHBoxLayout()
         self.btn_select_files = QPushButton("Select Image(s)")
         self.btn_select_files.clicked.connect(self.select_files)
+        self.btn_clear_files = QPushButton("Clear")
+        self.btn_clear_files.clicked.connect(self.clear_files)
+        
+        btn_layout.addWidget(self.btn_select_files)
+        btn_layout.addWidget(self.btn_clear_files)
+        
         self.lbl_selected_files = QLabel("No files selected")
         self.lbl_selected_files.setWordWrap(True)
         
-        input_layout.addWidget(self.btn_select_files)
+        input_layout.addLayout(btn_layout)
         input_layout.addWidget(self.lbl_selected_files)
         input_group.setLayout(input_layout)
         
@@ -127,14 +194,22 @@ class WebPConverterTool(QWidget):
         self.btn_convert = QPushButton("Convert Images")
         self.btn_convert.clicked.connect(self.start_conversion)
         
-        # Add widgets to main layout
-        layout.addWidget(input_group)
-        layout.addWidget(settings_group)
-        layout.addWidget(self.progress)
-        layout.addWidget(self.btn_convert)
-        layout.addStretch()
+        # Add widgets to control layout
+        control_layout.addWidget(input_group)
+        control_layout.addWidget(settings_group)
+        control_layout.addWidget(self.progress)
+        control_layout.addWidget(self.btn_convert)
+        control_layout.addStretch()
         
-        self.setLayout(layout)
+        # Set up control group
+        control_group.setLayout(control_layout)
+        control_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        
+        # Add both panels to main layout
+        main_layout.addWidget(preview_group, stretch=2)
+        main_layout.addWidget(control_group, stretch=1)
+        
+        self.setLayout(main_layout)
         
         # Update UI based on initial state
         self.update_ui_for_conversion()
@@ -157,6 +232,100 @@ class WebPConverterTool(QWidget):
             self.chk_lossless.setEnabled(False)
             self.chk_lossless.setChecked(False)
             self.spin_quality.setEnabled(True)
+        
+        # Update file filter and clear current selection
+        self.input_files = []
+        self.lbl_selected_files.setText("No files selected")
+        self.clear_thumbnails()
+    
+    def clear_thumbnails(self):
+        # Clear existing thumbnails
+        while self.thumbnail_layout.count():
+            child = self.thumbnail_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        self.current_preview = None
+        self.current_path = None
+        self.main_preview.clear()
+        self.size_info.clear()
+        self.format_info.clear()
+    
+    def clear_files(self):
+        self.input_files = []
+        self.lbl_selected_files.setText("No files selected")
+        self.clear_thumbnails()
+    
+    def update_preview(self, image_path):
+        try:
+            # Update main preview
+            pixmap = QPixmap(image_path)
+            if not pixmap.isNull():
+                # Scale the pixmap to fit the preview area while maintaining aspect ratio
+                scaled_pixmap = pixmap.scaled(
+                    self.main_preview.size(),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
+                self.main_preview.setPixmap(scaled_pixmap)
+                
+                # Update image info
+                img = Image.open(image_path)
+                width, height = img.size
+                self.size_info.setText(f"{width} × {height} px • {os.path.getsize(image_path) / 1024:.1f} KB")
+                self.format_info.setText(f"Format: {img.format}" if img.format else "Format: Unknown")
+                
+                self.current_path = image_path
+                return True
+        except Exception as e:
+            print(f"Error loading preview: {e}")
+        return False
+    
+    def thumbnail_clicked(self, path):
+        if self.update_preview(path):
+            # Update selection
+            for i in range(self.thumbnail_layout.count()):
+                item = self.thumbnail_layout.itemAt(i)
+                if item and item.widget():
+                    item.widget().setStyleSheet(
+                        "border: 2px solid #2196F3;" if item.widget().property("path") == path 
+                        else "border: 1px solid #ddd;"
+                    )
+    
+    def create_thumbnail(self, image_path, index):
+        try:
+            # Create thumbnail
+            img = Image.open(image_path)
+            img.thumbnail((100, 100), Image.Resampling.LANCZOS)
+            
+            # Convert to QPixmap
+            if img.mode == 'RGBA':
+                format = QImage.Format_RGBA8888
+            else:
+                format = QImage.Format_RGB888
+            
+            img_data = img.tobytes("raw", img.mode)
+            qimage = QImage(img_data, img.width, img.height, img.width * len(img.mode), format)
+            pixmap = QPixmap.fromImage(qimage)
+            
+            # Create thumbnail label
+            thumbnail = ThumbnailLabel()
+            thumbnail.setPixmap(pixmap)
+            thumbnail.setToolTip(os.path.basename(image_path))
+            thumbnail.setProperty("path", image_path)
+            thumbnail.mousePressEvent = lambda e: self.thumbnail_clicked(image_path)
+            
+            # Add to layout
+            row = index // 3
+            col = index % 3
+            self.thumbnail_layout.addWidget(thumbnail, row, col)
+            
+            # Select first image by default
+            if index == 0:
+                self.thumbnail_clicked(image_path)
+                
+        except Exception as e:
+            print(f"Error creating thumbnail: {e}")
     
     def select_files(self):
         if self.radio_to_webp.isChecked():
@@ -170,6 +339,7 @@ class WebPConverterTool(QWidget):
             "",
             file_filter
         )
+        
         if files:
             self.input_files = files
             file_count = len(files)
@@ -177,6 +347,13 @@ class WebPConverterTool(QWidget):
                 self.lbl_selected_files.setText(f"1 file selected: {os.path.basename(files[0])}")
             else:
                 self.lbl_selected_files.setText(f"{file_count} files selected")
+            
+            # Clear existing thumbnails
+            self.clear_thumbnails()
+            
+            # Create new thumbnails
+            for i, file in enumerate(files):
+                self.create_thumbnail(file, i)
     
     def change_output_dir(self):
         try:
@@ -226,16 +403,25 @@ class WebPConverterTool(QWidget):
         self.progress.setVisible(False)
         QMessageBox.critical(self, "Error", error_msg)
     
+    def update_progress(self, value):
+        self.progress.setValue(value)
+    
+    def conversion_finished(self):
+        self.set_ui_enabled(True)
+        self.progress.setVisible(False)
+        QMessageBox.information(self, "Success", "Image conversion completed successfully!")
+    
     def set_ui_enabled(self, enabled):
         self.btn_select_files.setEnabled(enabled)
+        self.btn_clear_files.setEnabled(enabled)
         self.btn_convert.setEnabled(enabled)
-        self.btn_change_dir.setEnabled(enabled)
+        self.radio_to_webp.setEnabled(enabled)
+        self.radio_from_webp.setEnabled(enabled)
         self.spin_quality.setEnabled(enabled and not self.chk_lossless.isChecked())
         self.cmb_format.setEnabled(enabled and not self.radio_to_webp.isChecked())
         self.chk_preserve_metadata.setEnabled(enabled)
         self.chk_lossless.setEnabled(enabled and self.radio_to_webp.isChecked())
-        self.radio_to_webp.setEnabled(enabled)
-        self.radio_from_webp.setEnabled(enabled)
+        self.btn_change_dir.setEnabled(enabled)
 
 
 class WebPConversionWorker(QThread):

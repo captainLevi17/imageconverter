@@ -3,13 +3,15 @@
 ## [Unreleased] - 2025-05-26
 ### Added
 - Added new Image Compressor Tool with preview functionality
-- Implemented thumbnail gallery for image selection
-- Added real-time compression preview
+- Implemented thumbnail gallery for image selection in all tools
+- Added real-time preview to WebP Converter tool
 - Support for JPEG, PNG, and WebP output formats
 - Added quality adjustment slider (1-100%)
 - Included file size comparison in preview
 - Added preserve metadata option
 - Implemented custom output directory selection
+- Added image format and dimension information display
+- Click-to-preview functionality in gallery view
 
 ## [0.4.0] - 2025-05-20
 ### Added
