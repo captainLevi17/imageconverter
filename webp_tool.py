@@ -13,13 +13,33 @@ class ThumbnailLabel(QLabel):
         super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
         self.setMinimumSize(80, 80)
+        self.setMaximumSize(120, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setStyleSheet("""
-            border: 1px solid #ddd;
-            margin: 2px;
-            padding: 2px;
+            QLabel {
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                background-color: #f5f5f5;
+                margin: 0px;
+                padding: 4px;
+            }
+            QLabel:hover {
+                background-color: #e9e9e9;
+                border: 1px solid #ccc;
+            }
         """)
-        self.setScaledContents(True)
+        self.setScaledContents(False)
+        
+    def resizeEvent(self, event):
+        # Maintain aspect ratio when resizing
+        if self.pixmap() and not self.pixmap().isNull():
+            pixmap = self.pixmap()
+            scaled_pixmap = pixmap.scaled(
+                self.size() - QSize(8, 8),  # Add some padding
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            self.setPixmap(scaled_pixmap)
 
 
 class WebPConverterTool(QWidget):
@@ -65,11 +85,20 @@ class WebPConverterTool(QWidget):
         # Thumbnail scroll area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # Disable horizontal scroll
+        
+        self.thumbnail_container = QWidget()
+        self.thumbnail_container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        
+        # Thumbnail container with grid layout
         self.thumbnail_container = QWidget()
         self.thumbnail_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.thumbnail_layout = QGridLayout()
         self.thumbnail_layout.setSpacing(5)
+        self.thumbnail_layout.setContentsMargins(5, 5, 5, 5)
         self.thumbnail_container.setLayout(self.thumbnail_layout)
+        
+        # Add container to scroll area
         scroll.setWidget(self.thumbnail_container)
         preview_layout.addWidget(scroll, stretch=1)
         
@@ -77,7 +106,12 @@ class WebPConverterTool(QWidget):
         self.main_preview = QLabel()
         self.main_preview.setAlignment(Qt.AlignCenter)
         self.main_preview.setMinimumSize(300, 250)
-        self.main_preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.main_preview.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.main_preview.setStyleSheet("""
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        """)
         preview_layout.addWidget(QLabel("Selected Preview:"))
         preview_layout.addWidget(self.main_preview, stretch=2)
         
@@ -240,10 +274,10 @@ class WebPConverterTool(QWidget):
     
     def clear_thumbnails(self):
         # Clear existing thumbnails
-        while self.thumbnail_layout.count():
-            child = self.thumbnail_layout.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
+        for i in reversed(range(self.thumbnail_layout.count())):
+            item = self.thumbnail_layout.itemAt(i)
+            if item.widget():
+                item.widget().deleteLater()
         
         self.current_preview = None
         self.current_path = None
@@ -255,6 +289,35 @@ class WebPConverterTool(QWidget):
         self.input_files = []
         self.lbl_selected_files.setText("No files selected")
         self.clear_thumbnails()
+        
+    def select_files(self):
+        # Get file filter based on conversion direction
+        if self.radio_to_webp.isChecked():
+            file_filter = "Images (*.png *.jpg *.jpeg *.bmp *.tiff *.gif)"
+        else:
+            file_filter = "WebP Images (*.webp)"
+            
+        files, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Select Images",
+            "",
+            file_filter
+        )
+        
+        if files:
+            self.input_files = files
+            file_count = len(files)
+            if file_count == 1:
+                self.lbl_selected_files.setText(f"1 file selected: {os.path.basename(files[0])}")
+            else:
+                self.lbl_selected_files.setText(f"{file_count} files selected")
+            
+            # Update the thumbnails
+            self.update_thumbnail_layout()
+            
+            # Select first image by default
+            if files:
+                self.thumbnail_clicked(files[0])
     
     def update_preview(self, image_path):
         try:
@@ -263,11 +326,13 @@ class WebPConverterTool(QWidget):
             if not pixmap.isNull():
                 # Scale the pixmap to fit the preview area while maintaining aspect ratio
                 scaled_pixmap = pixmap.scaled(
-                    self.main_preview.size(),
+                    self.main_preview.width(),
+                    self.main_preview.height(),
                     Qt.KeepAspectRatio,
                     Qt.SmoothTransformation
                 )
                 self.main_preview.setPixmap(scaled_pixmap)
+                self.main_preview.setAlignment(Qt.AlignCenter)
                 
                 # Update image info
                 img = Image.open(image_path)
@@ -292,69 +357,88 @@ class WebPConverterTool(QWidget):
                         else "border: 1px solid #ddd;"
                     )
     
-    def create_thumbnail(self, image_path, index):
-        try:
-            # Create thumbnail
-            img = Image.open(image_path)
-            img.thumbnail((100, 100), Image.Resampling.LANCZOS)
-            
-            # Convert to QPixmap
-            if img.mode == 'RGBA':
-                format = QImage.Format_RGBA8888
-            else:
-                format = QImage.Format_RGB888
-            
-            img_data = img.tobytes("raw", img.mode)
-            qimage = QImage(img_data, img.width, img.height, img.width * len(img.mode), format)
-            pixmap = QPixmap.fromImage(qimage)
-            
-            # Create thumbnail label
-            thumbnail = ThumbnailLabel()
-            thumbnail.setPixmap(pixmap)
-            thumbnail.setToolTip(os.path.basename(image_path))
-            thumbnail.setProperty("path", image_path)
-            thumbnail.mousePressEvent = lambda e: self.thumbnail_clicked(image_path)
-            
-            # Add to layout
-            row = index // 3
-            col = index % 3
-            self.thumbnail_layout.addWidget(thumbnail, row, col)
-            
-            # Select first image by default
-            if index == 0:
-                self.thumbnail_clicked(image_path)
-                
-        except Exception as e:
-            print(f"Error creating thumbnail: {e}")
-    
-    def select_files(self):
-        if self.radio_to_webp.isChecked():
-            file_filter = "Images (*.jpg *.jpeg *.png *.bmp *.tiff);;All Files (*)"
-        else:
-            file_filter = "WebP Images (*.webp);;All Files (*)"
-            
-        files, _ = QFileDialog.getOpenFileNames(
-            self,
-            "Select Images",
-            "",
-            file_filter
-        )
+    def update_thumbnail_layout(self):
+        # Clear existing thumbnails
+        for i in reversed(range(self.thumbnail_layout.count())): 
+            self.thumbnail_layout.itemAt(i).widget().setParent(None)
         
-        if files:
-            self.input_files = files
-            file_count = len(files)
-            if file_count == 1:
-                self.lbl_selected_files.setText(f"1 file selected: {os.path.basename(files[0])}")
-            else:
-                self.lbl_selected_files.setText(f"{file_count} files selected")
-            
-            # Clear existing thumbnails
-            self.clear_thumbnails()
-            
-            # Create new thumbnails
-            for i, file in enumerate(files):
-                self.create_thumbnail(file, i)
+        # Create new thumbnails
+        for i, path in enumerate(self.input_files):
+            try:
+                # Get image info
+                img = Image.open(path)
+                width, height = img.size
+                file_size = os.path.getsize(path) / 1024  # KB
+                
+                # Create thumbnail container
+                thumb_container = QWidget()
+                thumb_container.setStyleSheet("""
+                    QWidget {
+                        background: transparent;
+                        margin: 2px;
+                        padding: 4px;
+                    }
+                """)
+                thumb_layout = QVBoxLayout()
+                thumb_layout.setContentsMargins(0, 0, 0, 0)
+                thumb_layout.setSpacing(4)
+                thumb_layout.setAlignment(Qt.AlignCenter)
+                thumb_container.setLayout(thumb_layout)
+                
+                # Create thumbnail image
+                thumb_img = img.copy()
+                thumb_img.thumbnail((120, 120))  # Fixed thumbnail size
+                
+                # Convert to QPixmap
+                thumb_img = thumb_img.convert("RGBA")
+                data = thumb_img.tobytes("raw", "RGBA")
+                qimg = QImage(data, thumb_img.size[0], thumb_img.size[1], QImage.Format_RGBA8888)
+                pixmap = QPixmap.fromImage(qimg)
+                
+                # Create thumbnail label
+                thumb = ThumbnailLabel()
+                thumb.setPixmap(pixmap)
+                thumb_layout.addWidget(thumb)
+                
+                # Add info label
+                info_label = QLabel(f"{width}×{height} • {file_size:.1f} KB")
+                info_label.setAlignment(Qt.AlignCenter)
+                info_label.setStyleSheet("""
+                    QLabel {
+                        font-size: 9px; 
+                        color: #666;
+                        background: transparent;
+                        padding: 2px 0;
+                    }
+                """)
+                thumb_layout.addWidget(info_label, alignment=Qt.AlignCenter)
+                
+                # Make clickable
+                thumb_container.mousePressEvent = lambda e, p=path: self.thumbnail_clicked(p)
+                thumb_container.setToolTip(f"{os.path.basename(path)}\n{width}×{height} pixels\n{file_size:.1f} KB")
+                
+                # Add to grid (3 columns)
+                row = i // 3
+                col = i % 3
+                self.thumbnail_layout.addWidget(thumb_container, row, col)
+                
+                # Show first image in main preview
+                if i == 0:
+                    self.thumbnail_clicked(path)
+                    
+            except Exception as e:
+                print(f"Error loading thumbnail for {path}: {str(e)}")
     
+    def create_thumbnail(self, image_path, index):
+        # Just add the file to input_files and update the layout
+        if image_path not in self.input_files:
+            self.input_files.append(image_path)
+        self.update_thumbnail_layout()
+        
+        # Select first image by default
+        if index == 0:
+            self.thumbnail_clicked(image_path)
+            
     def change_output_dir(self):
         try:
             dir_path = QFileDialog.getExistingDirectory(self, "Select Output Directory", self.output_dir)
