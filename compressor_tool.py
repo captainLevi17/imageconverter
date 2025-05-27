@@ -416,6 +416,7 @@ class CompressionWorker(QThread):
             
             # Open the image
             with Image.open(input_path) as img:
+                
                 # Get original size
                 original_size = img.size
                 max_dimension = 2000  # Maximum width or height
@@ -424,22 +425,36 @@ class CompressionWorker(QThread):
                 if max(original_size) > max_dimension:
                     ratio = max_dimension / max(original_size)
                     new_size = (int(original_size[0] * ratio), int(original_size[1] * ratio))
+                    print(f"Resizing from {original_size} to {new_size}")
                     img = img.resize(new_size, Image.Resampling.LANCZOS)
                 
-                # Convert to appropriate color mode
-                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-                    img = img.convert('RGBA')
+                # Convert to appropriate color mode based on output format
+                if self.output_format.upper() == 'JPEG':
+                    # For JPEG output, ensure we have an RGB image
+                    if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                        # Create a white background for transparent areas
+                        if img.mode == 'RGBA':
+                            background = Image.new('RGB', img.size, (255, 255, 255))
+                            background.paste(img, mask=img.split()[3])  # Use alpha channel as mask
+                            img = background
+                        else:
+                            # For other modes with transparency, convert to RGB
+                            img = img.convert('RGB')
+                    elif img.mode != 'RGB':
+                        img = img.convert('RGB')
                 else:
-                    img = img.convert('RGB')
-                
-                # Preserve transparency for PNG and WebP
-                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-                    img = img.convert('RGBA')
-                else:
-                    img = img.convert('RGB')
+                    # For other formats, preserve transparency if needed
+                    if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                        img = img.convert('RGBA')
+                    else:
+                        img = img.convert('RGB')
                 
                 # Prepare output path
                 filename = os.path.splitext(os.path.basename(input_path))[0]
+                
+                # Ensure output directory exists
+                os.makedirs(self.output_dir, exist_ok=True)
+                
                 output_path = os.path.join(
                     self.output_dir,
                     f"{filename}_compressed.{self.output_format.lower()}"
@@ -480,18 +495,22 @@ class CompressionWorker(QThread):
                     }
                 
                 # Save the image
-                img.save(output_path, **save_kwargs)
-                
-                # Preserve metadata if requested
-                if self.preserve_metadata and hasattr(img, 'info') and img.info:
-                    try:
-                        # Reopen the image to update metadata
-                        with Image.open(output_path) as output_img:
-                            # Copy relevant metadata
-                            output_img.info = img.info.copy()
-                            output_img.save(output_path, **save_kwargs)
-                    except Exception as e:
-                        print(f"Warning: Could not preserve metadata: {str(e)}")
+                try:
+                    # Save the image
+                    img.save(output_path, **save_kwargs)
+                    
+                    # Preserve metadata if requested
+                    if self.preserve_metadata and hasattr(img, 'info') and img.info:
+                        try:
+                            # Reopen the image to update metadata
+                            with Image.open(output_path) as output_img:
+                                # Copy relevant metadata
+                                output_img.info = img.info.copy()
+                                output_img.save(output_path, **save_kwargs)
+                        except Exception as e:
+                            print(f"Warning: Could not preserve metadata: {str(e)}")
+                except Exception as e:
+                    raise Exception(f"Failed to save image: {str(e)}")
         
         except Exception as e:
             raise Exception(f"Failed to process {os.path.basename(input_path)}: {str(e)}")

@@ -50,6 +50,16 @@ A Python desktop application for image manipulation with PyQt5.
 - Copy as HTML snippet with one click
 - Multiple output formats: Plain Text, JSON, HTML
 
+### Background Remover Tool
+- Remove backgrounds from images with AI-powered processing
+- Multiple background options:
+  - Transparent (PNG)
+  - Solid color (white, black, or custom)
+- Batch process multiple images
+- Preview before processing
+- Supports various image formats
+- Custom output directory selection
+
 ## Installation
 
 1. Clone this repository

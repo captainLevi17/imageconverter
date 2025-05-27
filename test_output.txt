@@ -1,0 +1,33 @@
+========================================================== test session starts ==========================================================
+platform win32 -- Python 3.11.9, pytest-8.3.5, pluggy-1.6.0 -- e:\Projects\GitHub\Desktop Apps\imageconverter\venv\Scripts\python.exe
+cachedir: .pytest_cache
+PyQt5 5.15.11 -- Qt runtime 5.15.2 -- Qt compiled 5.15.2
+rootdir: E:\Projects\GitHub\Desktop Apps\imageconverter
+configfile: pytest.ini
+plugins: cov-6.1.1, mock-3.14.1, qt-4.4.0
+collecting ... collected 3 items
+
+tests/test_detailed.py::test_qt_app Qt application created successfully
+PASSED
+tests/test_detailed.py::test_addition Running addition test
+PASSED
+tests/test_detailed.py::TestDetailed::test_qt_available Setting up test
+Testing Qt availability
+PASSEDTearing down test
+
+WARNING: Failed to generate report: No data to report.
+
+
+
+============================================================ tests coverage =============================================================
+____________________________________________ coverage: platform win32, python 3.11.9-final-0 ____________________________________________
+
+=========================================================== 3 passed in 0.04s ===========================================================
+
+e:\Projects\GitHub\Desktop Apps\imageconverter\venv\Lib\site-packages\coverage\inorout.py:509: CoverageWarning: Module imageconverter was never imported. (module-not-imported)
+  self.warn(f"Module {pkg} was never imported.", slug="module-not-imported")
+e:\Projects\GitHub\Desktop Apps\imageconverter\venv\Lib\site-packages\coverage\control.py:915: CoverageWarning: No data was collected. (no-data-collected)
+  self._warn("No data was collected.", slug="no-data-collected")
+e:\Projects\GitHub\Desktop Apps\imageconverter\venv\Lib\site-packages\pytest_cov\plugin.py:336: CovReportWarning: Failed to generate report: No data to report.
+
+  warnings.warn(CovReportWarning(message), stacklevel=1)

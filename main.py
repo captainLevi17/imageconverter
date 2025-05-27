@@ -21,6 +21,38 @@ from base64_tool import Base64Tool
 from compressor_tool import CompressorTool
 from webp_tool import WebPConverterTool
 
+# Import remover tool
+REMBG_AVAILABLE = False
+REMBG_ERROR = ""
+RemoverTool = None
+
+try:
+    # First try to import onnxruntime directly to check if it's working
+    import onnxruntime as ort
+    print(f"ONNX Runtime version: {getattr(ort, '__version__', 'unknown')}")
+    
+    # Now try to import remover_tool
+    from remover_tool import RemoverTool, REMBG_AVAILABLE
+    
+    if REMBG_AVAILABLE:
+        REMOVER_TOOL_AVAILABLE = True
+        print("Background Remover tool is available")
+    else:
+        REMOVER_TOOL_AVAILABLE = False
+        print("Note: Background Remover tool is not available. Check console for details.")
+        
+except ImportError as e:
+    REMBG_ERROR = str(e)
+    print(f"Error importing remover tool: {e}")
+    import traceback
+    traceback.print_exc()
+    REMOVER_TOOL_AVAILABLE = False
+    
+    if "No module named 'onnxruntime'" in REMBG_ERROR:
+        REMBG_ERROR = "onnxruntime is not installed. Please install it with: pip install onnxruntime"
+    elif "No module named 'rembg'" in REMBG_ERROR:
+        REMBG_ERROR = "rembg is not installed. Please install it with: pip install rembg"
+
 # Initialize HEIC support flag
 HEIC_SUPPORT = False
 
@@ -87,10 +119,35 @@ class ImageMasterApp(QMainWindow):
             except Exception as e:
                 print(f"Error initializing HEIC tool: {e}")
         
+        # Add Background Remover tab if available
+        if REMOVER_TOOL_AVAILABLE:
+            try:
+                self.tabs.addTab(RemoverTool(), "BG Remover")
+            except Exception as e:
+                print(f"Error initializing Background Remover: {e}")
+                import traceback
+                traceback.print_exc()
+                self.add_placeholder_tab("BG Remover", "Background Remover (Error - Check Console)")
+        else:
+            error_msg = """Background Remover (Not Available)
+            
+            The Background Remover tool requires additional packages to be installed.
+            
+            Please run these commands in your terminal:
+            pip uninstall -y onnxruntime onnxruntime-gpu
+            pip install onnxruntime==1.15.1
+            pip install rembg==2.0.50
+            
+            If you still see this message after installation,
+            please check the console for detailed error messages.
+            """
+            self.add_placeholder_tab("BG Remover", error_msg)
+
+
+
         # Add placeholder tabs for other tools
         self.add_placeholder_tab("Dashboard", "Home Dashboard")
         self.add_placeholder_tab("Cropper", "Image Cropper")
-        self.add_placeholder_tab("BG Remover", "Background Remover")
         
         # Add widgets to main layout
         main_layout.addWidget(header)

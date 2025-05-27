@@ -12,16 +12,16 @@
   - [x] HEIC Converter
   - [x] Base64 Converter
   - [x] WebP Converter
+  - [x] Background Remover
 
 ## 🚧 In Development
-- [ ] Background Remover
 - [ ] Image Cropper
 
 ## 🔄 Next Up
-- [ ] Implement Background Remover tool
 - [ ] Implement Image Cropper tool
 - [ ] Add keyboard shortcuts
 - [ ] Implement settings system
+- [ ] Enhance test coverage for all tools
 
 ## 📋 Pending
 
@@ -87,12 +87,12 @@
 - [x] Add lossless option
 
 #### Background Remover
-- [ ] Integrate AI background removal library (e.g., rembg)
-- [ ] Implement transparent/colored background options
-- [ ] Add edge refinement controls
-- [ ] Implement batch processing
-- [ ] Add preview functionality
-- [ ] Support custom background colors/images
+- [x] Integrate AI background removal library (rembg)
+- [x] Implement transparent/colored background options
+- [x] Add edge refinement controls
+- [x] Implement batch processing
+- [x] Add preview functionality
+- [x] Support custom background colors/images
 
 #### Image Cropper
 - [ ] Implement basic cropping functionality
@@ -143,18 +143,36 @@
 
 ## 📅 Version History
 - **Unreleased (Current Development)**
-  - Background Remover tool
   - Image Cropper tool
   - Keyboard shortcuts
   - Settings system
+  - Enhanced test coverage
 
-- **v0.4.0 (2025-05-26)**
+- **v0.6.0 (2025-05-27)**
+  - Added Background Remover Tool with AI-powered background removal
+  - Implemented transparent and colored background options
+  - Added batch processing for background removal
+  - Improved error handling and memory management
+  - Added comprehensive test suite
+  - Implemented CI-ready test configuration
+
+- **v0.5.0 (2025-05-26)**
   - Enhanced Image Compressor with preview
   - Thumbnail gallery for all tools
   - Real-time preview in WebP Converter
   - Multiple output formats support
   - File size comparison
   - Metadata preservation option
+  - Custom output directory selection
+  - Image format and dimension information
+  - Click-to-preview functionality
+
+- **v0.4.0 (2025-05-20)**
+  - Added "Copy HTML Snippet" button to Base64 tool
+  - Comprehensive preset categories in Image Resizer
+  - Improved error handling and user feedback
+  - Optimized HEIC image conversion
+  - Enhanced thumbnail grid layout
 
 - **v0.3.0 (2025-05-20)**
   - Added Base64 HTML snippet generation

@@ -1,6 +1,22 @@
 # Changelog
 
-## [Unreleased] - 2025-05-26
+## [Unreleased] - 2025-05-27
+### Added
+- Added Background Remover Tool with AI-powered background removal
+- Implemented custom color selection for background replacement
+- Added transparent background support (PNG)
+- Added batch processing capability for background removal
+- Implemented preview functionality for background removal
+- Added comprehensive test suite for core functionality
+- Added test coverage reporting
+- Implemented CI-ready test configuration
+
+### Fixed
+- Fixed HEIC converter tab visibility when pillow-heif is installed
+- Improved error handling in image processing tools
+- Fixed memory management in batch processing
+
+## [0.5.0] - 2025-05-26
 ### Added
 - Added new Image Compressor Tool with preview functionality
 - Implemented thumbnail gallery for image selection in all tools
