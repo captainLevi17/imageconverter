@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] - 2025-05-28
+## [Unreleased]
 ### Added
 - Added Background Remover Tool with AI-powered background removal
 - Implemented custom color selection for background replacement
@@ -13,6 +13,18 @@
 - Added aspect ratio presets (e.g., 1:1, 16:9, 4:3, Free) to the Image Cropper tool
 - Added image transformation controls (rotate, flip) to the Image Cropper
 - Implemented output format and quality settings for the Image Cropper
+
+### Changed
+- **Codebase Optimization (2025-05-28)**:
+  - Created shared utility modules in `utils/` package:
+    - `ui_components.py`: Reusable UI components (ThumbnailLabel, ImagePreviewGallery, FileControls)
+    - `image_utils.py`: Common image processing functions (loading, saving, resizing, format conversion)
+    - `file_utils.py`: File system operations and validation
+    - `preview.py`: Image preview and thumbnail management
+  - Updated `__init__.py` to properly expose all public APIs
+  - Improved code organization and reduced duplication
+  - Added comprehensive docstrings and type hints
+  - Standardized error handling across utility functions
 
 ### Fixed
 - Fixed HEIC converter tab visibility when pillow-heif is installed

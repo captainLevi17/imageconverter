@@ -20,6 +20,35 @@
 - [ ] Implement settings system
 - [ ] Enhance test coverage for all tools
 
+## 🔄 Codebase Optimization
+- [x] Create shared utility modules (2025-05-28)
+  - [x] Create `utils` package structure
+  - [x] Move common UI components to `utils/ui_components.py`
+    - [x] ThumbnailLabel
+    - [x] ImagePreviewGallery
+    - [x] FileControls
+  - [x] Move image utilities to `utils/image_utils.py`
+    - [x] Image loading/saving
+    - [x] Format conversion
+    - [x] Thumbnail generation
+  - [x] Move file operations to `utils/file_utils.py`
+    - [x] File dialogs
+    - [x] Directory operations
+    - [x] File type validation
+  - [x] Create preview management in `utils/preview.py`
+- [ ] Refactor tools to use shared components
+  - [] Update Image Resizer 
+  - [ ] Update Image Compressor 
+  - [ ] Update HEIC Converter
+  - [ ] Update Base64 Converter
+  - [ ] Update WebP Converter
+  - [ ] Update Background Remover
+  - [ ] Update Image Cropper
+- [x] Update documentation (2025-05-28)
+  - [x] Update CHANGELOG.md with new project structure
+  - [x] Add docstrings to all new modules
+  - [x] Document public APIs in `__init__.py`
+
 ## 🔄 Next Up
 - [ ] Add keyboard shortcuts
 - [ ] Implement settings system
@@ -143,6 +172,7 @@
 
 ## 📅 Version History
 - **Unreleased (Current Development)**
+  - Codebase optimization and refactoring
   - Keyboard shortcuts
   - Settings system
   - Enhanced test coverage

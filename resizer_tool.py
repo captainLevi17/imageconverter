@@ -2,22 +2,27 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                             QPushButton, QFileDialog, QSpinBox, QCheckBox,
                             QGroupBox, QProgressBar, QScrollArea, QGridLayout,
                             QSizePolicy, QComboBox)
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QTimer
 from PyQt5.QtGui import QPixmap, QImage
 from PIL import Image
 import os
+import time
 
-class ThumbnailLabel(QLabel):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setAlignment(Qt.AlignCenter)
-        self.setMinimumSize(120, 120)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.setStyleSheet("""
-            border: 1px solid #ddd;
-            margin: 2px;
-            padding: 2px;
-        """)
+# Import utility modules
+from utils import (
+    ThumbnailLabel,  # Reuse the component from utils
+    FileControls,    # Reuse the component from utils
+    load_image,      # For loading images
+    save_image,      # For saving images
+    resize_image,    # For resizing images
+    create_thumbnail, # For creating thumbnails
+    get_image_info,   # For getting image information
+    validate_directory, # For directory validation
+    create_directory,  # For creating directories
+    get_unique_filename, # For getting unique filenames
+    get_file_size,    # For getting file size in human-readable format
+    PreviewManager    # For managing previews
+)
 
 class ResizerTool(QWidget):
     def __init__(self):

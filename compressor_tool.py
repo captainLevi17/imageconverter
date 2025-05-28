@@ -1,53 +1,62 @@
 import os
 import sys
 from pathlib import Path
+from typing import Optional, List, Dict, Any
+
 from PIL import Image, ImageFile, ExifTags
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize
+from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
                            QFileDialog, QSpinBox, QComboBox, QCheckBox, QProgressBar,
                            QMessageBox, QGroupBox, QSizePolicy, QSpacerItem, QScrollArea,
                            QGridLayout)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QImage, QPixmap
 
-class ThumbnailLabel(QLabel):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setAlignment(Qt.AlignCenter)
-        self.setMinimumSize(100, 100)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.setStyleSheet("""
-            border: 1px solid #ddd;
-            margin: 2px;
-            padding: 2px;
-            background: #f8f8f8;
-        """)
+# Import utility modules
+from utils import (
+    ThumbnailLabel,  # Reuse the component from utils
+    FileControls,    # Reuse the component from utils
+    load_image,      # For loading images
+    save_image,      # For saving images
+    get_image_info,  # For getting image information
+    validate_directory, # For directory validation
+    create_directory,  # For creating directories
+    get_unique_filename, # For getting unique filenames
+    get_file_size,    # For getting file size in human-readable format
+    PreviewManager    # For managing previews
+)
+
+# ThumbnailLabel is now imported from utils.ui_components
 
 class CompressorTool(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         
         # Initialize instance variables
-        self.input_files = []
+        self.input_files: List[str] = []
         self.current_preview = None
-        self.current_path = None
+        self.current_path: Optional[str] = None
         self.output_dir = str(Path.home() / "Pictures" / "Compressed")
         
-        # Try to create the output directory
-        try:
-            os.makedirs(self.output_dir, exist_ok=True)
-        except Exception as e:
-            print(f"Error creating output directory: {e}")
-            # Fallback to Pictures directory
-            self.output_dir = str(Path.home() / "Pictures")
-            try:
-                os.makedirs(self.output_dir, exist_ok=True)
-            except Exception as e:
-                print(f"Error creating fallback directory: {e}")
-                # Last resort: use current working directory
-                self.output_dir = os.getcwd()
+        # Create output directory using utility function
+        success, message = create_directory(self.output_dir)
+        if not success:
+            # If default directory creation fails, try fallback to Pictures
+            self.output_dir = str(Path.home() / "Pictures" / "Compressed")
+            success, message = create_directory(self.output_dir)
+            if not success:
+                # If still failing, use system temp directory as last resort
+                import tempfile
+                self.output_dir = str(Path(tempfile.gettempdir()) / "imageconverter" / "compressed")
+                success, message = create_directory(self.output_dir)
+                if not success:
+                    print(f"Warning: Could not create any output directory: {message}")
+                    self.output_dir = str(Path.home())  # Fall back to home directory
         
         # Configure PIL to be more tolerant of image files
         ImageFile.LOAD_TRUNCATED_IMAGES = True
+        
+        # Initialize preview manager
+        self.preview_manager = PreviewManager()
         
         # Initialize UI
         self.setup_ui()
@@ -102,19 +111,12 @@ class CompressorTool(QWidget):
         control_layout = QVBoxLayout()
         control_layout.setSpacing(15)
         
-        # File selection
-        self.file_label = QLabel("No images selected (0)")
-        
-        file_btn_layout = QHBoxLayout()
-        self.btn_select_files = QPushButton("Add Images")
-        self.btn_clear_files = QPushButton("Clear")
-        self.btn_select_files.clicked.connect(self.select_files)
-        self.btn_clear_files.clicked.connect(self.clear_files)
-        file_btn_layout.addWidget(self.btn_select_files)
-        file_btn_layout.addWidget(self.btn_clear_files)
-        
-        control_layout.addWidget(self.file_label)
-        control_layout.addLayout(file_btn_layout)
+        # File selection using FileControls component
+        self.file_controls = FileControls(
+            on_browse=self.select_files,
+            on_clear=self.clear_files
+        )
+        control_layout.addWidget(self.file_controls)
         
         # Output settings
         
@@ -192,14 +194,14 @@ class CompressorTool(QWidget):
         if files:
             self.input_files = files
             self.update_thumbnails()
-            self.file_label.setText(f"{len(files)} image(s) selected")
+            self.file_controls.update_file_count(len(files))
             
     def clear_files(self):
         self.input_files = []
         self.current_preview = None
         self.current_path = None
         self.update_thumbnails()
-        self.file_label.setText("No images selected (0)")
+        self.file_controls.clear()
         self.main_preview.clear()
         self.size_info.clear()
         self.compression_info.clear()
@@ -209,33 +211,29 @@ class CompressorTool(QWidget):
         for i in reversed(range(self.thumbnail_layout.count())): 
             self.thumbnail_layout.itemAt(i).widget().setParent(None)
         
+        # Clear preview if no files
+        if not self.input_files:
+            self.main_preview.clear()
+            self.size_info.clear()
+            self.compression_info.clear()
+            return
+        
         # Create new thumbnails
         for i, path in enumerate(self.input_files):
             try:
                 # Create thumbnail container
                 thumb_container = QWidget()
                 thumb_layout = QVBoxLayout()
+                thumb_layout.setContentsMargins(2, 2, 2, 2)
+                thumb_layout.setSpacing(2)
                 thumb_container.setLayout(thumb_layout)
                 
-                # Create thumbnail label
+                # Create thumbnail label using preview manager
                 thumb_label = ThumbnailLabel()
-                
-                # Load and resize image for thumbnail
-                img = Image.open(path)
-                img.thumbnail((100, 100), Image.Resampling.LANCZOS)
-                
-                # Convert to QPixmap
-                if img.mode == 'RGBA':
-                    img = img.convert('RGBA')
-                    data = img.tobytes('raw', 'RGBA')
-                    qimg = QImage(data, img.width, img.height, QImage.Format_RGBA8888)
-                else:
-                    img = img.convert('RGB')
-                    data = img.tobytes('raw', 'RGB')
-                    qimg = QImage(data, img.width, img.height, QImage.Format_RGB888)
-                
-                pixmap = QPixmap.fromImage(qimg)
-                thumb_label.setPixmap(pixmap)
+                thumb_size = QSize(120, 120)
+                thumb_pixmap = self.preview_manager.get_thumbnail(path, thumb_size)
+                if thumb_pixmap:
+                    thumb_label.setPixmap(thumb_pixmap)
                 
                 # Add filename label
                 filename = os.path.basename(path)
@@ -243,7 +241,7 @@ class CompressorTool(QWidget):
                     filename = filename[:12] + '...'
                 filename_label = QLabel(filename)
                 filename_label.setAlignment(Qt.AlignCenter)
-                filename_label.setStyleSheet("font-size: 9px; margin-top: 2px;")
+                filename_label.setStyleSheet("font-size: 9px;")
                 
                 # Add to layout
                 thumb_layout.addWidget(thumb_label)
@@ -266,35 +264,34 @@ class CompressorTool(QWidget):
     
     def show_full_preview(self, path):
         try:
-            self.current_preview = Image.open(path)
+            # Load the image using our utility function
+            self.current_preview = load_image(path)
+            if not self.current_preview:
+                raise Exception("Failed to load image")
+                
             self.current_path = path
             
-            # Update main preview
-            preview_img = self.current_preview.copy()
-            preview_img.thumbnail((600, 400), Image.Resampling.LANCZOS)
-            
-            # Convert to QPixmap
-            if preview_img.mode == 'RGBA':
-                preview_img = preview_img.convert('RGBA')
-                data = preview_img.tobytes('raw', 'RGBA')
-                qimg = QImage(data, preview_img.width, preview_img.height, QImage.Format_RGBA8888)
-            else:
-                preview_img = preview_img.convert('RGB')
-                data = preview_img.tobytes('raw', 'RGB')
-                qimg = QImage(data, preview_img.width, preview_img.height, QImage.Format_RGB888)
-            
-            pixmap = QPixmap.fromImage(qimg)
-            self.main_preview.setPixmap(pixmap)
-            
-            # Update info
-            orig_width, orig_height = self.current_preview.size
-            file_size = os.path.getsize(path) / 1024  # KB
-            
-            self.size_info.setText(
-                f"{os.path.basename(path)}\n"
-                f"Dimensions: {orig_width} × {orig_height} px • "
-                f"Size: {file_size:.1f} KB"
+            # Update main preview using preview manager
+            success = self.preview_manager.update_preview(
+                path, 
+                self.main_preview, 
+                max_size=QSize(600, 400)
             )
+            if not success:
+                raise Exception("Failed to update preview")
+            
+            # Get image info using utility function
+            img_info = get_image_info(path)
+            if img_info:
+                width, height = img_info.get('size', (0, 0))
+                file_size = img_info.get('size_bytes', 0) / 1024  # Convert to KB
+                
+                self.size_info.setText(
+                    f"{os.path.basename(path)}\n"
+                    f"Dimensions: {width} × {height} px • "
+                    f"Size: {file_size:.1f} KB • "
+                    f"Format: {img_info.get('format', 'Unknown')}"
+                )
             
             # Update compression info
             self.update_compression_info()
@@ -325,12 +322,34 @@ class CompressorTool(QWidget):
     
     def change_output_dir(self):
         try:
-            dir_path = QFileDialog.getExistingDirectory(self, "Select Output Directory", self.output_dir)
+            dir_path = QFileDialog.getExistingDirectory(
+                self, 
+                "Select Output Directory", 
+                self.output_dir
+            )
             if dir_path:
-                self.output_dir = dir_path
-                self.lbl_output_dir.setText(f"Output: {self.output_dir}")
+                # Validate the selected directory
+                if validate_directory(dir_path):
+                    self.output_dir = dir_path
+                    # Update the label with a shortened path if too long
+                    display_path = self.output_dir
+                    if len(display_path) > 40:
+                        display_path = '...' + display_path[-37:]
+                    self.lbl_output_dir.setText(f"Output: {display_path}")
+                    self.lbl_output_dir.setToolTip(self.output_dir)  # Show full path on hover
+                else:
+                    QMessageBox.warning(
+                        self, 
+                        "Invalid Directory", 
+                        "The selected directory is not writable. Please choose a different directory."
+                    )
         except Exception as e:
             print(f"Error changing output directory: {e}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to change output directory: {str(e)}"
+            )
     
     def start_compression(self):
         if not self.input_files:
@@ -370,8 +389,9 @@ class CompressorTool(QWidget):
         QMessageBox.critical(self, "Error", error_msg)
     
     def set_ui_enabled(self, enabled):
-        self.btn_select_files.setEnabled(enabled)
-        self.btn_compress.setEnabled(enabled)
+        """Enable or disable UI elements during operations."""
+        self.file_controls.setEnabled(enabled)
+        self.btn_compress.setEnabled(enabled and len(self.input_files) > 0)
         self.btn_change_dir.setEnabled(enabled)
         self.spin_quality.setEnabled(enabled)
         self.cmb_format.setEnabled(enabled)
@@ -409,108 +429,163 @@ class CompressionWorker(QThread):
         except Exception as e:
             self.error_occurred.emit(f"Unexpected error: {str(e)}")
     
-    def process_image(self, input_path, index):
-        try:
-            # Import PIL here to ensure it's available in this scope
-            from PIL import Image, ImageFile
+    def process_image(self, input_path: str, index: int) -> None:
+        """Process and save a single image with compression settings.
+        
+        Args:
+            input_path: Path to the input image file
+            index: Index of the current image in the processing queue
             
-            # Open the image
-            with Image.open(input_path) as img:
+        Raises:
+            Exception: If image processing or saving fails
+        """
+        img = None
+        try:
+            print(f"\nProcessing image {index}: {os.path.basename(input_path)}")
+            print(f"Original file size: {os.path.getsize(input_path) / 1024:.1f} KB")
+            
+            # Load the image using our utility function
+            img = load_image(input_path)
+            if img is None:
+                raise Exception("Failed to load image - load_image returned None")
                 
-                # Get original size
-                original_size = img.size
-                max_dimension = 2000  # Maximum width or height
-                
-                # Calculate new size maintaining aspect ratio
-                if max(original_size) > max_dimension:
-                    ratio = max_dimension / max(original_size)
-                    new_size = (int(original_size[0] * ratio), int(original_size[1] * ratio))
-                    print(f"Resizing from {original_size} to {new_size}")
+            print(f"Image loaded. Mode: {img.mode}, Size: {img.size}, Format: {getattr(img, 'format', 'unknown')}")
+            
+            # Ensure image is not empty
+            if not img.size[0] or not img.size[1]:
+                raise Exception(f"Invalid image dimensions: {img.size}")
+            
+            # Get original size and calculate new size if needed
+            original_size = img.size
+            max_dimension = 2000  # Maximum width or height
+            
+            # Calculate new size maintaining aspect ratio if needed
+            if max(original_size) > max_dimension:
+                ratio = max_dimension / max(original_size)
+                new_size = (int(original_size[0] * ratio), int(original_size[1] * ratio))
+                print(f"Resizing from {original_size} to {new_size}")
+                try:
                     img = img.resize(new_size, Image.Resampling.LANCZOS)
-                
-                # Convert to appropriate color mode based on output format
-                if self.output_format.upper() == 'JPEG':
-                    # For JPEG output, ensure we have an RGB image
-                    if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-                        # Create a white background for transparent areas
-                        if img.mode == 'RGBA':
-                            background = Image.new('RGB', img.size, (255, 255, 255))
-                            background.paste(img, mask=img.split()[3])  # Use alpha channel as mask
-                            img = background
-                        else:
-                            # For other modes with transparency, convert to RGB
-                            img = img.convert('RGB')
-                    elif img.mode != 'RGB':
-                        img = img.convert('RGB')
-                else:
-                    # For other formats, preserve transparency if needed
-                    if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                    print(f"Resize successful. New size: {img.size}")
+                except Exception as resize_error:
+                    raise Exception(f"Failed to resize image: {str(resize_error)}")
+            
+            # Prepare output path with unique filename
+            filename = os.path.splitext(os.path.basename(input_path))[0]
+            output_filename = f"{filename}_compressed.{self.output_format.lower()}"
+            output_path = os.path.join(self.output_dir, output_filename)
+            print(f"Output path: {output_path}")
+            print(f"Output format: {self.output_format.upper()}")
+            print(f"Quality: {self.quality}")
+            print(f"Preserve metadata: {self.preserve_metadata}")
+            
+            # Ensure output directory exists
+            success, message = create_directory(self.output_dir)
+            if not success:
+                raise Exception(f"Failed to create output directory: {message}")
+            
+            # Prepare save options
+            save_options = {
+                'format': self.output_format.upper(),
+                'quality': max(5, min(100, self.quality)),
+                'optimize': True
+            }
+            
+            # Add format-specific options
+            if self.output_format.upper() == 'JPEG':
+                # Convert to RGB mode for JPEG
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                save_options.update({
+                    'progressive': True,
+                    'subsampling': '4:2:0',
+                    'qtables': 'web_low',
+                    'dpi': (72, 72),
+                    'icc_profile': b''
+                })
+            elif self.output_format.upper() == 'PNG':
+                # Convert to RGBA if image has transparency
+                if img.mode == 'P' and 'transparency' in img.info:
+                    img = img.convert('RGBA')
+                elif img.mode == 'P':
+                    img = img.convert('RGB')
+                save_options.update({
+                    'compress_level': 6,  # Balanced between speed and compression
+                    'dpi': (72, 72),
+                    'icc_profile': b''
+                })
+            elif self.output_format.upper() == 'WEBP':
+                # Convert to RGB/RGBA for WebP
+                if img.mode == 'P':
+                    if 'transparency' in img.info:
                         img = img.convert('RGBA')
                     else:
                         img = img.convert('RGB')
+                save_options.update({
+                    'method': 4,  # Faster encoding with good compression
+                    'lossless': False,
+                    'icc_profile': b'',
+                    'exif': b'',
+                    'dpi': (72, 72)
+                })
+            
+            try:
+                print("Attempting to save image with options:", save_options)
                 
-                # Prepare output path
-                filename = os.path.splitext(os.path.basename(input_path))[0]
+                # First, try saving with the utility function
+                if not save_image(img, output_path, **save_options):
+                    raise Exception("save_image function returned False")
                 
-                # Ensure output directory exists
-                os.makedirs(self.output_dir, exist_ok=True)
+                print(f"Image saved successfully. Output size: {os.path.getsize(output_path) / 1024:.1f} KB")
                 
-                output_path = os.path.join(
-                    self.output_dir,
-                    f"{filename}_compressed.{self.output_format.lower()}"
-                )
+                # Preserve metadata if requested
+                if self.preserve_metadata and hasattr(img, 'info') and img.info:
+                    try:
+                        print("Attempting to preserve metadata...")
+                        with Image.open(output_path) as output_img:
+                            # Only preserve metadata that's safe to copy
+                            safe_metadata = {}
+                            for key, value in img.info.items():
+                                if key.lower() in ('dpi', 'resolution', 'exif', 'icc_profile'):
+                                    safe_metadata[key] = value
+                            
+                            if safe_metadata:
+                                print(f"Preserving metadata: {', '.join(safe_metadata.keys())}")
+                                output_img.info = safe_metadata
+                                output_img.save(output_path, **save_options)
+                                print("Metadata preserved successfully")
+                    except Exception as meta_error:
+                        print(f"Warning: Could not preserve metadata: {str(meta_error)}")
                 
-                # Handle format-specific saving with optimized compression
-                save_kwargs = {}
-                quality = max(5, min(100, self.quality))  # Ensure quality is between 5-100
+                return  # Success!
                 
-                if self.output_format.upper() == 'JPEG':
-                    save_kwargs = {
-                        'quality': quality,
-                        'optimize': True,
-                        'progressive': True,
-                        'subsampling': '4:2:0',  # Always use 4:2:0 for better compression
-                        'qtables': 'web_low',  # More aggressive compression
-                        'dpi': (72, 72),  # Standard screen DPI
-                        'icc_profile': b''  # Remove ICC profile to save space
-                    }
-                elif self.output_format.upper() == 'PNG':
-                    # For PNG, we'll convert to 8-bit color if possible
-                    if img.mode == 'RGBA' or img.mode == 'RGB':
-                        img = img.convert('P', palette=Image.ADAPTIVE, colors=256)
-                    save_kwargs = {
-                        'optimize': True,
-                        'compress_level': 9,  # Maximum compression
-                        'dpi': (72, 72),
-                        'icc_profile': b''  # Remove ICC profile
-                    }
-                elif self.output_format.upper() == 'WEBP':
-                    save_kwargs = {
-                        'quality': max(5, quality - 10),  # Slightly lower quality for better compression
-                        'method': 4,  # Faster encoding with good compression
-                        'lossless': False,
-                        'icc_profile': b'',  # Remove ICC profile
-                        'exif': b'',  # Remove EXIF data
-                        'dpi': (72, 72)
-                    }
+            except Exception as e:
+                print(f"Initial save failed: {str(e)}")
                 
-                # Save the image
+                # If initial save fails, try a simpler save with minimal options
                 try:
-                    # Save the image
-                    img.save(output_path, **save_kwargs)
+                    print("Trying fallback save method...")
+                    simple_options = {
+                        'format': self.output_format.upper(),
+                        'quality': max(5, min(100, self.quality)),
+                        'optimize': True
+                    }
+                    print("Fallback save options:", simple_options)
                     
-                    # Preserve metadata if requested
-                    if self.preserve_metadata and hasattr(img, 'info') and img.info:
-                        try:
-                            # Reopen the image to update metadata
-                            with Image.open(output_path) as output_img:
-                                # Copy relevant metadata
-                                output_img.info = img.info.copy()
-                                output_img.save(output_path, **save_kwargs)
-                        except Exception as e:
-                            print(f"Warning: Could not preserve metadata: {str(e)}")
-                except Exception as e:
-                    raise Exception(f"Failed to save image: {str(e)}")
+                    # Try direct save without the utility function
+                    img.save(output_path, **simple_options)
+                    print(f"Fallback save successful. Output size: {os.path.getsize(output_path) / 1024:.1f} KB")
+                    
+                except Exception as save_error:
+                    # If all else fails, try converting to RGB and saving
+                    try:
+                        print("Trying final fallback with RGB conversion...")
+                        if img.mode != 'RGB':
+                            img = img.convert('RGB')
+                        img.save(output_path, format=self.output_format.upper(), quality=max(5, min(100, self.quality)))
+                        print(f"Final fallback successful. Output size: {os.path.getsize(output_path) / 1024:.1f} KB")
+                    except Exception as final_error:
+                        raise Exception(f"All save attempts failed. Last error: {str(final_error)}")
         
         except Exception as e:
             raise Exception(f"Failed to process {os.path.basename(input_path)}: {str(e)}")
