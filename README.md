@@ -60,6 +60,14 @@ A Python desktop application for image manipulation with PyQt5.
 - Supports various image formats
 - Custom output directory selection
 
+### Image Cropper Tool
+- Interactively select an area of an image to crop
+- Preview the selected crop area
+- Choose from predefined aspect ratios (e.g., 1:1, 16:9, 4:3, Free) or crop freely.
+- Save the cropped image in various formats (JPEG, PNG, WebP)
+- Adjustable quality for JPEG/WebP output
+- Custom output directory selection
+
 ## Installation
 
 1. Clone this repository
@@ -114,6 +122,20 @@ Output files will be saved in:
 Output files will be saved in:
 - Specified output folder, or
 - Same folder as originals if no output folder selected
+
+### Image Cropper Tool Guide
+1. Click "Browse Images" to load an image into the cropper.
+2. (Optional) Select a predefined aspect ratio from the available presets (e.g., 1:1, 16:9, 4:3) or leave as 'Free' for custom selection.
+3. Click and drag on the image to draw a selection rectangle. If an aspect ratio is set, the selection will maintain it.
+4. Adjust the selection by dragging the rectangle or its resize handles.
+5. Select the desired output format (JPEG, PNG, WebP).
+6. Adjust quality for JPEG/WebP if needed using the slider.
+7. (Optional) Click "Select Output Directory" to choose a custom save location.
+8. Click "Crop and Save Image".
+
+Output files will have a "_cropped" suffix and be saved in:
+- The specified output folder, or
+- The same folder as the original image if no output folder is selected.
 
 ## Dependencies
 - Python 3.10+

@@ -10,14 +10,6 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QImage
 from PIL import Image
-# Import ImageQt based on Pillow version
-try:
-    from PIL.ImageQt import ImageQt
-    HAS_IMAGEQT_CLASS = True
-except ImportError:
-    # Older Pillow versions don't have ImageQt as a class
-    from PIL import ImageQt
-    HAS_IMAGEQT_CLASS = False
 
 # Initialize rembg related variables
 REMBG_AVAILABLE = False
@@ -382,36 +374,20 @@ class RemoverTool(QWidget):
                 img = Image.open(path)
                 img.thumbnail((100, 100), Image.Resampling.LANCZOS)
                 
+                # Convert PIL Image to QPixmap directly
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                data = img.tobytes('raw', 'RGBA')
+                qimage = QImage(data, img.size[0], img.size[1], QImage.Format_RGBA8888)
+                pixmap = QPixmap.fromImage(qimage)
+
                 # Create thumbnail label
                 thumb = ThumbnailLabel()
-                
-                # Convert PIL Image to QPixmap using different methods based on Pillow version
-                try:
-                    # Try direct conversion to QPixmap from file
-                    pixmap = QPixmap(path)
-                    if not pixmap.isNull():
-                        # Scale the pixmap to thumbnail size while maintaining aspect ratio
-                        pixmap = pixmap.scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                    else:
-                        # Fallback to using ImageQt if direct loading fails
-                        raise Exception("Failed to load image directly")
-                except Exception as e:
-                    # Fallback to using ImageQt
-                    try:
-                        if HAS_IMAGEQT_CLASS:
-                            qim = ImageQt(img)
-                        else:
-                            qim = ImageQt.ImageQt(img)
-                        pixmap = QPixmap.fromImage(qim)
-                    except Exception as e2:
-                        print(f"Error creating thumbnail for {path}: {e2}")
-                        return
-                
                 thumb.setPixmap(pixmap)
                 thumb.setToolTip(os.path.basename(path))
                 
-                # Connect click event
-                thumb.mousePressEvent = lambda e, p=path, img=img: self.show_preview(p, img)
+                # Connect click event - pass only path to show_preview
+                thumb.mousePressEvent = lambda e, p=path: self.show_preview(p)
                 
                 # Add to layout (2 columns)
                 row = i // 2
@@ -421,32 +397,64 @@ class RemoverTool(QWidget):
             except Exception as e:
                 print(f"Error loading thumbnail for {path}: {e}")
     
-    def show_preview(self, path, img=None):
+    def show_preview(self, path):
         """Show the selected image in the main preview"""
         self.current_path = path
         
         try:
-            if img is None:
-                img = Image.open(path)
+            # Always load the original image for the main preview
+            original_img = Image.open(path)
+            original_width, original_height = original_img.size
+            
+            # Create a copy for manipulation as img.thumbnail modifies in-place
+            img_to_display = original_img.copy()
             
             # Update main preview
-            preview_size = self.main_preview.size()
-            img.thumbnail((preview_size.width() - 20, preview_size.height() - 20), 
-                         Image.Resampling.LANCZOS)
+            preview_widget_size = self.main_preview.size()
             
-            # Convert to QPixmap and display
-            if HAS_IMAGEQT_CLASS:
-                qimg = ImageQt(img)
+            # Calculate target size for the preview, ensuring it fits within the label
+            # and maintains aspect ratio. Subtract some padding.
+            target_width = preview_widget_size.width() - 20  # 10px padding on each side
+            target_height = preview_widget_size.height() - 20 # 10px padding on top/bottom
+
+            if target_width <= 0 or target_height <= 0:
+                # If preview area is too small, use a fixed small thumbnail or show error
+                print(f"Warning: Preview area ({preview_widget_size.width()}x{preview_widget_size.height()}) is too small for {path}. Using 100x100 thumbnail.")
+                img_to_display.thumbnail((100, 100), Image.Resampling.LANCZOS)
             else:
-                qimg = ImageQt.ImageQt(img)
-            self.main_preview.setPixmap(QPixmap.fromImage(qimg))
+                img_to_display.thumbnail((target_width, target_height), 
+                                     Image.Resampling.LANCZOS)
             
-            # Update info
-            width, height = img.size
-            self.size_info.setText(f"{width} × {height} px | {os.path.basename(path)}")
+            # Ensure the image is in a compatible mode (e.g., RGBA)
+            if img_to_display.mode != 'RGBA':
+                img_to_display = img_to_display.convert('RGBA')
+
+            # Convert to QPixmap directly
+            data = img_to_display.tobytes('raw', 'RGBA')
+            qimage = QImage(data, img_to_display.size[0], img_to_display.size[1], QImage.Format_RGBA8888)
+            pixmap_to_set = QPixmap.fromImage(qimage)
+
+            if pixmap_to_set.isNull():
+                print(f"Error: Created QPixmap is null for {path}")
+                self.main_preview.setText(f"Error loading preview for\n{os.path.basename(path)}")
+                self.size_info.setText(f"{original_width} × {original_height} px | Error")
+                return
+
+            self.main_preview.setPixmap(pixmap_to_set)
             
+            # Update info with original image dimensions
+            self.size_info.setText(f"{original_width} × {original_height} px | {os.path.basename(path)}")
+
+        except FileNotFoundError:
+            print(f"Error: File not found for preview {path}")
+            self.main_preview.setText(f"File Not Found:\n{os.path.basename(path)}")
+            self.size_info.setText("File Not Found")
         except Exception as e:
             print(f"Error loading preview for {path}: {e}")
+            import traceback
+            traceback.print_exc() # Print full traceback for debugging
+            self.main_preview.setText(f"Error loading preview for\n{os.path.basename(path)}")
+            self.size_info.setText("Error loading preview")
     
     def select_output_dir(self):
         """Select output directory for processed images"""

@@ -13,17 +13,18 @@
   - [x] Base64 Converter
   - [x] WebP Converter
   - [x] Background Remover
+  - [x] Image Cropper
 
 ## 🚧 In Development
-- [ ] Image Cropper
-
-## 🔄 Next Up
 - [ ] Implement Image Cropper tool
 - [ ] Add keyboard shortcuts
 - [ ] Implement settings system
 - [ ] Enhance test coverage for all tools
 
-## 📋 Pending
+## 🔄 Next Up
+- [ ] Add keyboard shortcuts
+- [ ] Implement settings system
+- [ ] Enhance test coverage for all tools
 
 ### Core Application
 - [ ] Implement settings system
@@ -95,8 +96,8 @@
 - [x] Support custom background colors/images
 
 #### Image Cropper
-- [ ] Implement basic cropping functionality
-- [ ] Add aspect ratio presets
+- [x] Implement basic cropping functionality
+- [x] Add aspect ratio presets
 - [ ] Add rotation and flip options
 - [ ] Implement visual guides (rule of thirds, etc.)
 - [ ] Add before/after preview
@@ -143,7 +144,6 @@
 
 ## 📅 Version History
 - **Unreleased (Current Development)**
-  - Image Cropper tool
   - Keyboard shortcuts
   - Settings system
   - Enhanced test coverage

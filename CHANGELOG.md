@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] - 2025-05-27
+## [Unreleased] - 2025-05-28
 ### Added
 - Added Background Remover Tool with AI-powered background removal
 - Implemented custom color selection for background replacement
@@ -10,11 +10,13 @@
 - Added comprehensive test suite for core functionality
 - Added test coverage reporting
 - Implemented CI-ready test configuration
+- Added aspect ratio presets (e.g., 1:1, 16:9, 4:3, Free) to the Image Cropper tool.
 
 ### Fixed
 - Fixed HEIC converter tab visibility when pillow-heif is installed
 - Improved error handling in image processing tools
 - Fixed memory management in batch processing
+- Resolved image cropper accuracy issues by refining coordinate calculations and using `round()` for precision.
 
 ## [0.5.0] - 2025-05-26
 ### Added

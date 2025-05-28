@@ -20,6 +20,7 @@ from resizer_tool import ResizerTool
 from base64_tool import Base64Tool
 from compressor_tool import CompressorTool
 from webp_tool import WebPConverterTool
+from cropper_tool import CropperTool
 
 # Import remover tool
 REMBG_AVAILABLE = False
@@ -145,9 +146,11 @@ class ImageMasterApp(QMainWindow):
 
 
 
+        # Add Cropper tool
+        self.tabs.addTab(CropperTool(), "Cropper")
+        
         # Add placeholder tabs for other tools
         self.add_placeholder_tab("Dashboard", "Home Dashboard")
-        self.add_placeholder_tab("Cropper", "Image Cropper")
         
         # Add widgets to main layout
         main_layout.addWidget(header)
