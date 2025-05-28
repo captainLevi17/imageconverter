@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 from typing import Tuple, Optional
 import traceback
+import numpy as np
+from PIL import Image
 
 # Import PyQt5 modules
 from PyQt5.QtWidgets import (
@@ -22,13 +24,13 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import (
     Qt, QPoint, QRect, QRectF, QSize, pyqtSignal, QPointF, QTimer,
-    QThread, QObject, QEvent, QMarginsF, QBuffer, QByteArray,
+    QThread, QObject, QEvent, QMarginsF, QBuffer, QByteArray, # Ensure QBuffer and QByteArray are here
     QUrl, QMimeData, QStandardPaths, QFileInfo, QDir, 
     QCoreApplication
 )
 from PyQt5.QtGui import (
     QPixmap, QImage, QPainter, QPen, QColor, QImageReader,
-    QCursor, QIcon, QFont, QFontMetrics, QPainterPath, QBrush, QMouseEvent
+    QCursor, QIcon, QFont, QFontMetrics, QPainterPath, QBrush, QMouseEvent, QTransform
 )
 
 # Import PIL for image processing
@@ -196,7 +198,7 @@ class CropArea(QLabel):
         self.update()
     
     def update_scaled_pixmap(self):
-        """Update the scaled pixmap when the widget is resized."""
+        """Update the scaled pixmap when the widget is resized or image changes."""
         if not self.original_pixmap:
             self.scaled_pixmap = None # Ensure scaled_pixmap is None if original is None
             self.update()
@@ -749,6 +751,98 @@ class CropArea(QLabel):
 
         painter.end() # Moved to the very end
 
+    def rotate_image(self, angle):
+        """Rotate the original_pixmap by the given angle (degrees)."""
+        if not self.original_pixmap:
+            return
+            
+        # Store current aspect ratio settings
+        current_ar = self.aspect_ratio
+        ar_tuple = self.get_aspect_ratio_tuple()
+        
+        # Rotate the image
+        transform = QTransform().rotate(angle)
+        self.original_pixmap = self.original_pixmap.transformed(transform, Qt.SmoothTransformation)
+        
+        # Update the scaled pixmap and reset selection
+        self.update_scaled_pixmap()
+        
+        # Re-apply aspect ratio if one was set
+        if current_ar > 0:
+            # Swap width/height for 90/270 degree rotations
+            if abs(angle) % 180 == 90:
+                ar_tuple = (ar_tuple[1], ar_tuple[0])
+            self.set_aspect_ratio(*ar_tuple, keep_current_center=True)
+        else:
+            self.reset_selection()
+            
+        self.update()
+        self.crop_changed.emit(self.selection_rect())
+        
+        # Notify parent to update the PIL image
+        if hasattr(self.parent(), '_update_pil_image_safely'):
+            self.parent()._update_pil_image_safely()
+
+    def flip_horizontal_image(self):
+        """Flip the original_pixmap horizontally."""
+        if not self.original_pixmap:
+            return
+            
+        # Store current selection
+        current_sel = self.selection_rect()
+        
+        # Flip the image
+        qimage = self.original_pixmap.toImage()
+        flipped_qimage = qimage.mirrored(True, False)
+        self.original_pixmap = QPixmap.fromImage(flipped_qimage)
+        
+        # Update display and selection
+        self.update_scaled_pixmap()
+        self.update()
+        
+        # Maintain the same selection area (flipped)
+        if not current_sel.isNull():
+            img_rect = self.get_image_rect()
+            new_x = img_rect.right() - current_sel.right() + img_rect.left()
+            self.start_pos = QPoint(new_x, current_sel.top())
+            self.end_pos = QPoint(new_x + current_sel.width(), current_sel.bottom())
+        
+        self.crop_changed.emit(self.selection_rect())
+        
+        # Notify parent to update the PIL image
+        if hasattr(self.parent(), '_update_pil_image_safely'):
+            self.parent()._update_pil_image_safely()
+
+    def flip_vertical_image(self):
+        """Flip the original_pixmap vertically."""
+        if not self.original_pixmap:
+            return
+            
+        # Store current selection
+        current_sel = self.selection_rect()
+        
+        # Flip the image
+        qimage = self.original_pixmap.toImage()
+        flipped_qimage = qimage.mirrored(False, True)
+        self.original_pixmap = QPixmap.fromImage(flipped_qimage)
+        
+        # Update display and selection
+        self.update_scaled_pixmap()
+        self.update()
+        
+        # Maintain the same selection area (flipped)
+        if not current_sel.isNull():
+            img_rect = self.get_image_rect()
+            new_y = img_rect.bottom() - current_sel.bottom() + img_rect.top()
+            self.start_pos = QPoint(current_sel.left(), new_y)
+            self.end_pos = QPoint(current_sel.right(), new_y + current_sel.height())
+        
+        self.crop_changed.emit(self.selection_rect())
+        
+        # Notify parent to update the PIL image
+        if hasattr(self.parent(), '_update_pil_image_safely'):
+            self.parent()._update_pil_image_safely()
+
 class CropperThumbnailItem(QWidget):
     """Custom widget for displaying a single thumbnail in the CropperTool gallery."""
     clicked = pyqtSignal(str)  # Emits image path when clicked
@@ -876,42 +970,100 @@ class CropperTool(QWidget):
     
     def init_ui(self):
         """Initialize the user interface."""
-        main_layout = QHBoxLayout()
-        main_layout.setContentsMargins(5, 5, 5, 5)
-        main_layout.setSpacing(10)
+        # Set up the main layout with proper spacing
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setSpacing(12)
         
-        # Left panel - Image cropping area (CropArea is the ONLY image display)
+        # Left panel - Image cropping area
         preview_group = QGroupBox("Preview & Crop")
-        preview_layout = QVBoxLayout()
+        preview_group.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 3px;
+            }
+        """)
+        preview_layout = QVBoxLayout(preview_group)
+        preview_layout.setContentsMargins(4, 16, 4, 4)
         
         # Crop area (the only widget that displays the image)
         self.crop_area = CropArea()
         self.crop_area.crop_changed.connect(self.on_crop_changed)
         preview_layout.addWidget(self.crop_area, 1)
         
-        preview_group.setLayout(preview_layout)
-        
         # Right panel - Controls
-        control_group = QGroupBox("Crop Controls")
-        control_layout = QVBoxLayout()
+        control_group = QWidget()
+        control_group.setMinimumWidth(280)
+        control_group.setMaximumWidth(350)
+        control_layout = QVBoxLayout(control_group)
+        control_layout.setContentsMargins(0, 0, 0, 0)
+        control_layout.setSpacing(12)
+        
+        # Scroll area for controls
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(2, 2, 10, 2)
+        scroll_layout.setSpacing(12)
+        
+        scroll.setWidget(scroll_content)
+        control_layout.addWidget(scroll)
+        
+        # Apply styles to all group boxes
+        group_style = """
+            QGroupBox {
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                padding: 8px 6px 12px 6px;
+                margin-top: 1ex;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 8px;
+                padding: 0 5px;
+            }
+        """
         
         # File selection
         file_group = QGroupBox("Image Selection")
-        file_layout = QVBoxLayout()
+        file_group.setStyleSheet(group_style)
+        file_layout = QVBoxLayout(file_group)
+        file_layout.setContentsMargins(6, 16, 6, 6)
+        file_layout.setSpacing(8)
         
-        self.thumbnail_scroll_area = QScrollArea()
-        self.thumbnail_scroll_area.setWidgetResizable(True)
-        self.thumbnail_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.thumbnail_scroll_area.setMinimumHeight(150)
-        self.thumbnail_scroll_area.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-
-        self.thumbnail_container_widget = QWidget()
-        self.thumbnail_layout = QGridLayout(self.thumbnail_container_widget)
-        self.thumbnail_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        self.thumbnail_layout.setSpacing(5)
+        # Create scroll area for thumbnails
+        self.thumbnail_scroll = QScrollArea()
+        self.thumbnail_scroll.setWidgetResizable(True)
+        self.thumbnail_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.thumbnail_scroll.setMinimumHeight(150)
         
-        self.thumbnail_scroll_area.setWidget(self.thumbnail_container_widget)
-        file_layout.addWidget(self.thumbnail_scroll_area)
+        # Container widget that will contain the grid
+        self.thumbnail_container = QWidget()
+        self.thumbnail_layout = QVBoxLayout(self.thumbnail_container)
+        self.thumbnail_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Grid layout for thumbnails
+        self.thumbnail_grid = QGridLayout()
+        self.thumbnail_grid.setSpacing(5)
+        self.thumbnail_grid.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        
+        # Add grid to container
+        self.thumbnail_layout.addLayout(self.thumbnail_grid)
+        self.thumbnail_layout.addStretch(1)  # Push thumbnails to top
+        
+        # Set up the scroll area
+        self.thumbnail_scroll.setWidget(self.thumbnail_container)
+        file_layout.addWidget(self.thumbnail_scroll)
 
         buttons_layout = QHBoxLayout()
         self.add_images_button = QPushButton(QIcon.fromTheme("list-add"), "Add Images")
@@ -927,7 +1079,10 @@ class CropperTool(QWidget):
         
         # Aspect ratio presets
         aspect_group = QGroupBox("Aspect Ratio")
-        aspect_layout = QVBoxLayout()
+        aspect_group.setStyleSheet(group_style)
+        aspect_layout = QVBoxLayout(aspect_group)
+        aspect_layout.setContentsMargins(6, 16, 6, 6)
+        aspect_layout.setSpacing(6)
         
         self.aspect_buttons = QButtonGroup()
         self.aspect_buttons.setExclusive(True)
@@ -970,9 +1125,82 @@ class CropperTool(QWidget):
         aspect_layout.addLayout(custom_layout)
         aspect_group.setLayout(aspect_layout)
         
+        # Transformation controls
+        transform_group = QGroupBox("Transform")
+        transform_group.setStyleSheet(group_style)
+        transform_layout = QGridLayout(transform_group)
+        transform_layout.setContentsMargins(8, 20, 8, 8)
+        transform_layout.setSpacing(6)
+        
+        # Button style - updated to match main UI buttons
+        btn_style = """
+            QPushButton {
+                padding: 6px 12px;
+                min-width: 80px;
+                max-width: 100px;
+                font-size: 12px;
+                font-weight: 500;
+                color: #333333;
+                border: 1px solid #0078d7;
+                border-radius: 4px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                          stop:0 #f8f8f8, stop:1 #e0e0e0);
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                          stop:0 #e0f0ff, stop:1 #c0dfff);
+                border: 1px solid #0078d7;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                          stop:0 #d0e0f0, stop:1 #b0d0f0);
+                padding-top: 7px;
+                padding-bottom: 5px;
+            }
+            QPushButton:disabled {
+                color: #999999;
+                border: 1px solid #cccccc;
+                background: #f0f0f0;
+            }
+        """
+        
+        # Rotate buttons
+        self.rotate_left_button = QPushButton("Rotate L")
+        self.rotate_left_button.clicked.connect(self._handle_rotate_left)
+        self.rotate_left_button.setToolTip("Rotate 90° counter-clockwise")
+        self.rotate_left_button.setStyleSheet(btn_style)
+        
+        self.rotate_right_button = QPushButton("Rotate R")
+        self.rotate_right_button.clicked.connect(self._handle_rotate_right)
+        self.rotate_right_button.setToolTip("Rotate 90° clockwise")
+        self.rotate_right_button.setStyleSheet(btn_style)
+        
+        # Flip buttons
+        self.flip_horizontal_button = QPushButton("Flip H")
+        self.flip_horizontal_button.clicked.connect(self._handle_flip_horizontal)
+        self.flip_horizontal_button.setToolTip("Flip horizontally")
+        self.flip_horizontal_button.setStyleSheet(btn_style)
+        
+        self.flip_vertical_button = QPushButton("Flip V")
+        self.flip_vertical_button.clicked.connect(self._handle_flip_vertical)
+        self.flip_vertical_button.setToolTip("Flip vertically")
+        self.flip_vertical_button.setStyleSheet(btn_style)
+        
+        # Add buttons to layout in a 2x2 grid
+        transform_layout.addWidget(self.rotate_left_button, 0, 0)
+        transform_layout.addWidget(self.rotate_right_button, 0, 1)
+        transform_layout.addWidget(self.flip_horizontal_button, 1, 0)
+        transform_layout.addWidget(self.flip_vertical_button, 1, 1)
+        
+        transform_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        control_layout.addWidget(transform_group, 0, Qt.AlignTop)
+
         # Output options
         output_group = QGroupBox("Output Options")
-        output_layout = QVBoxLayout()
+        output_group.setStyleSheet(group_style)
+        output_layout = QVBoxLayout(output_group)
+        output_layout.setContentsMargins(8, 20, 8, 8)
+        output_layout.setSpacing(8)
         
         format_layout = QHBoxLayout()
         format_layout.addWidget(QLabel("Format:"))
@@ -1014,27 +1242,62 @@ class CropperTool(QWidget):
         
         # Action buttons
         action_buttons_group = QGroupBox("Actions")
-        action_buttons_layout = QVBoxLayout()
+        action_buttons_group.setStyleSheet(group_style)
+        action_buttons_layout = QVBoxLayout(action_buttons_group)
+        action_buttons_layout.setContentsMargins(8, 20, 8, 8)
+        
+        # Style for action buttons
+        action_btn_style = """
+            QPushButton {
+                padding: 8px 12px;
+                font-size: 13px;
+                font-weight: bold;
+                border: 1px solid #4a7eb3;
+                border-radius: 4px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                          stop:0 #5d9cec, stop:1 #4a89dc);
+                color: white;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                          stop:0 #6aa8ff, stop:1 #5d9cec);
+                border: 1px solid #3a6da4;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                          stop:0 #4a89dc, stop:1 #5d9cec);
+                padding-top: 9px;
+                padding-bottom: 7px;
+            }
+            QPushButton:disabled {
+                background: #cccccc;
+                border: 1px solid #aaaaaa;
+                color: #888888;
+            }
+        """
+        
         self.crop_button = QPushButton(QIcon.fromTheme("image-crop"), "Crop & Save")
+        self.crop_button.setStyleSheet(action_btn_style)
         self.crop_button.clicked.connect(self.crop_and_save)
-        action_buttons_layout.addWidget(self.crop_button)
-        action_buttons_group.setLayout(action_buttons_layout)
+        action_buttons_layout.addWidget(self.crop_button, 0, Qt.AlignCenter)
         
-        control_layout.addWidget(file_group)
-        control_layout.addWidget(aspect_group)
-        control_layout.addWidget(output_group)
-        control_layout.addWidget(action_buttons_group)
-        control_layout.addStretch(1)
-        control_group.setLayout(control_layout)
+        # Add all groups to the scroll layout
+        scroll_layout.addWidget(file_group)
+        scroll_layout.addWidget(aspect_group)
+        scroll_layout.addWidget(transform_group)
+        scroll_layout.addWidget(output_group)
+        scroll_layout.addWidget(action_buttons_group)
+        scroll_layout.addStretch(1)  # Pushes controls to the top
         
-        main_layout.addWidget(preview_group, 2)
-        main_layout.addWidget(control_group, 1)
-
+        # Set up main layout
+        main_layout.addWidget(preview_group, 1)  # Preview takes remaining space
+        main_layout.addWidget(control_group, 0)  # Controls take minimum space
         self.setLayout(main_layout)
         
         # Set initial states
         if self.aspect_buttons.buttons(): 
-            self.aspect_buttons.buttons()[0].setChecked(True) # Default to 'Free Form'
+            self.aspect_buttons.buttons()[0].setChecked(True)  # Default to 'Free Form'
         
         if self.output_dir is None:
             self.output_dir = QStandardPaths.writableLocation(QStandardPaths.PicturesLocation)
@@ -1077,15 +1340,22 @@ class CropperTool(QWidget):
     def _add_thumbnail_to_gallery(self, image_path):
         """Creates a thumbnail and adds it to the gallery."""
         try:
-            item = CropperThumbnailItem(image_path, self.thumbnail_container_widget)
+            item = CropperThumbnailItem(image_path, self.thumbnail_container)
             item.clicked.connect(self._on_cropper_thumbnail_clicked)
             self.thumbnail_items.append(item)
             
             # Calculate row and column for the grid
-            num_items = len(self.thumbnail_items) -1 # 0-indexed
+            num_items = len(self.thumbnail_items) - 1  # 0-indexed
             row = num_items // THUMBNAIL_GRID_COLUMNS
             col = num_items % THUMBNAIL_GRID_COLUMNS
-            self.thumbnail_layout.addWidget(item, row, col)
+            self.thumbnail_grid.addWidget(item, row, col)
+            
+            # Update the container's minimum size to fit all thumbnails
+            self.thumbnail_container.adjustSize()
+            
+            # Ensure the container has a minimum width
+            min_width = (CROPPER_THUMB_ITEM_WIDTH + 10) * min(THUMBNAIL_GRID_COLUMNS, len(self.thumbnail_items))
+            self.thumbnail_container.setMinimumWidth(min_width)
 
         except Exception as e:
             print(f"Error creating thumbnail item for {image_path}: {e}")
@@ -1124,21 +1394,28 @@ class CropperTool(QWidget):
 
     def clear_images(self):
         """Clear the current image selection and gallery."""
-        # Remove widgets from layout and delete them
-        while self.thumbnail_layout.count() > 0:
-            layout_item = self.thumbnail_layout.takeAt(0)
-            if layout_item:
-                widget = layout_item.widget()
-                if widget:
-                    widget.deleteLater()
+        # Clear all items from the grid layout
+        for i in reversed(range(self.thumbnail_grid.count())): 
+            item = self.thumbnail_grid.itemAt(i)
+            if item.widget():
+                item.widget().deleteLater()
         
+        # Clear the thumbnail items list
         self.thumbnail_items.clear()
-        self.image_paths.clear() # Also clear the general list of paths
+        self.image_paths.clear()  # Also clear the general list of paths
         self.current_selected_thumbnail_item = None
         
+        # Reset the container's minimum width
+        if hasattr(self, 'thumbnail_container'):
+            self.thumbnail_container.setMinimumWidth(0)
+        
+        # Clear the crop area and current image
         if hasattr(self, 'crop_area') and self.crop_area:
             self.crop_area.clear_pixmap()
         self.current_pil_image = None
+        
+        # Reset the output directory
+        self.output_dir = None
         self.update_ui_state()
 
     def load_image_into_cropper(self, image_path: str):
@@ -1148,6 +1425,9 @@ class CropperTool(QWidget):
             self.crop_area.clear_pixmap()
             self.current_pil_image = None
             return
+            
+        # Store the current image path
+        self.current_image_path = image_path
             
         try:
             if hasattr(self, 'crop_area') and self.crop_area is not None:
@@ -1182,100 +1462,110 @@ class CropperTool(QWidget):
         self.update_ui_state()
 
     def crop_and_save(self):
-        """Crop and save the current image."""
-        if not self.current_pil_image or not self.crop_area.original_pixmap:
-            QMessageBox.warning(self, "Cannot Crop", "No image loaded or selection area is not ready.")
-            return
-
-        # CropArea.selection_rect() returns a QRect(x, y, width, height) 
-        # in *original image coordinates*.
-        selection_in_original_coords = self.crop_area.selection_rect()
-
-        if selection_in_original_coords.isNull() or selection_in_original_coords.width() <= 0 or selection_in_original_coords.height() <= 0:
-            # This can happen if the selection was made before an image was fully processed by CropArea
-            # or if the selection is somehow invalid (e.g., zero width/height after internal calcs).
-            print(f"[DEBUG] crop_and_save: CropArea.selection_rect() returned invalid rect: {selection_in_original_coords}")
-            QMessageBox.warning(self, "Cannot Crop", "Invalid selection area. Please try selecting the crop box again.")
-            return
-
-        original_w = self.current_pil_image.width
-        original_h = self.current_pil_image.height
-
-        # Convert QRect (x, y, w, h) from selection_rect() to PIL crop box (left, upper, right, lower)
-        # PIL's right/lower are exclusive boundaries.
-        pil_x1 = selection_in_original_coords.left()
-        pil_y1 = selection_in_original_coords.top()
-        # QRect.width() and QRect.height() are the actual pixel dimensions.
-        # PIL crop: (left, upper, right, lower) where right is left+width, lower is top+height.
-        pil_x2 = selection_in_original_coords.left() + selection_in_original_coords.width()
-        pil_y2 = selection_in_original_coords.top() + selection_in_original_coords.height()
-        
-        # Clamp coordinates to the original image dimensions
-        pil_x1_clamped = max(0, pil_x1)
-        pil_y1_clamped = max(0, pil_y1)
-        pil_x2_clamped = min(pil_x2, original_w) # Ensure right boundary is AT MOST original_w
-        pil_y2_clamped = min(pil_y2, original_h) # Ensure lower boundary is AT MOST original_h
-        
-        # Ensure valid dimensions after clamping (width and height must be > 0 for PIL crop)
-        if pil_x1_clamped >= pil_x2_clamped or pil_y1_clamped >= pil_y2_clamped:
-            QMessageBox.warning(self, "Cannot Crop", 
-                                f"Calculated crop area is invalid after clamping. \n"
-                                f"Original selection (orig coords from CropArea): {selection_in_original_coords} \n"
-                                f"PIL box before clamp: ({pil_x1},{pil_y1},{pil_x2},{pil_y2}) \n"
-                                f"Clamped PIL box: ({pil_x1_clamped},{pil_y1_clamped},{pil_x2_clamped},{pil_y2_clamped})")
-            return
-            
-        crop_box_pil = (pil_x1_clamped, pil_y1_clamped, pil_x2_clamped, pil_y2_clamped)
-        
-        # Debug output
-        print(f"[DEBUG] CropArea.selection_rect() (coords in original image): {selection_in_original_coords}")
-        print(f"[DEBUG] Original image size: {original_w}x{original_h}")
-        print(f"[DEBUG] Final PIL crop box (clamped): {crop_box_pil}")
-        
+        """Crop and save the current image with the selected area."""
         try:
-            cropped_image = self.current_pil_image.crop(crop_box_pil)
-        except Exception as e:
-            QMessageBox.critical(self, "Crop Error", f"Failed to crop image: {e}")
-            return
+            if not hasattr(self, 'current_pil_image') or not self.current_pil_image or not hasattr(self, 'crop_area') or not self.crop_area.original_pixmap:
+                QMessageBox.warning(self, "Cannot Crop", "No image loaded or selection area is not ready.")
+                return
 
-        # Determine output path
-        current_item = self.current_selected_thumbnail_item
-        if not current_item:
-            QMessageBox.warning(self, "Cannot Save", "No image selected for saving.")
-            return
-        original_path = current_item.image_path
-        base, ext = os.path.splitext(os.path.basename(original_path))
-        
-        output_format = self.format_combo.currentText().lower()
-        if output_format == "jpeg": new_ext = ".jpg"
-        elif output_format == "webp": new_ext = ".webp"
-        else: new_ext = ".png" # Default to PNG
+            # Get the selection rectangle in original image coordinates
+            selection_rect = self.crop_area.selection_rect()
+            if not selection_rect.isValid() or selection_rect.width() <= 0 or selection_rect.height() <= 0:
+                QMessageBox.warning(self, "Cannot Crop", "Please select a valid area to crop.")
+                return
 
-        output_filename = f"{base}_cropped{new_ext}"
-        
-        if self.output_dir:
-            output_path = os.path.join(self.output_dir, output_filename)
-        else:
-            output_path = os.path.join(os.path.dirname(original_path), output_filename)
-        
-        # Save the image
-        try:
-            save_params = {}
-            if output_format in ["jpeg", "webp"]:
-                save_params['quality'] = self.quality_slider.value()
-            if output_format == "jpeg":
-                # Ensure image is RGB for JPEG saving
-                if cropped_image.mode == 'RGBA':
-                    rgb_image = Image.new("RGB", cropped_image.size, (255, 255, 255))
-                    rgb_image.paste(cropped_image, mask=cropped_image.split()[3]) # 3 is the alpha channel
-                    cropped_image = rgb_image
-                elif cropped_image.mode != 'RGB':
-                    cropped_image = cropped_image.convert('RGB')
+            # Get the current image dimensions
+            img_width = self.current_pil_image.width
+            img_height = self.current_pil_image.height
+
+            # Calculate crop box in PIL coordinates (left, upper, right, lower)
+            left = max(0, selection_rect.left())
+            upper = max(0, selection_rect.top())
+            right = min(img_width, selection_rect.left() + selection_rect.width())
+            lower = min(img_height, selection_rect.top() + selection_rect.height())
+
+            # Ensure valid dimensions
+            if left >= right or upper >= lower:
+                QMessageBox.warning(self, "Cannot Crop", "Invalid crop dimensions. Please try again.")
+                return
+
+            # Perform the crop
+            cropped_image = self.current_pil_image.crop((left, upper, right, lower))
+
+            # Get output directory
+            if not hasattr(self, 'output_dir') or not self.output_dir:
+                self.choose_output_dir()
+                if not hasattr(self, 'output_dir') or not self.output_dir:
+                    return  # User cancelled directory selection
+
+            # Generate output filename
+            if hasattr(self, 'current_image_path') and self.current_image_path:
+                base_name = os.path.splitext(os.path.basename(self.current_image_path))[0]
+            else:
+                base_name = "cropped_image"
+                
+            if hasattr(self, 'filename_prefix_input') and self.filename_prefix_input.text():
+                base_name = f"{self.filename_prefix_input.text()}{base_name}"
+            if hasattr(self, 'filename_suffix_input') and self.filename_suffix_input.text():
+                base_name = f"{base_name}{self.filename_suffix_input.text()}"
+
+            # Get selected format and quality
+            file_format = 'jpeg'  # Default
+            quality = 95  # Default quality
             
-            cropped_image.save(output_path, format=None if output_format == 'jpeg' else output_format.upper(), **save_params)
-            QMessageBox.information(self, "Success", f"Cropped image saved to:\n{output_path}")
+            if hasattr(self, 'format_combo'):
+                file_format = self.format_combo.currentText().lower()
+                if file_format == 'jpg':
+                    file_format = 'jpeg'
+            
+            if hasattr(self, 'quality_slider'):
+                quality = self.quality_slider.value()
+
+            # Set file extension
+            ext = file_format if file_format != 'jpeg' else 'jpg'
+            output_path = os.path.join(self.output_dir, f"{base_name}_cropped.{ext}")
+
+            # Handle file overwrite
+            if os.path.exists(output_path):
+                reply = QMessageBox.question(
+                    self, 
+                    'File Exists', 
+                    f'File {os.path.basename(output_path)} already exists. Overwrite?',
+                    QMessageBox.Yes | QMessageBox.No, 
+                    QMessageBox.No
+                )
+                if reply == QMessageBox.No:
+                    return
+
+            # Save options
+            save_kwargs = {}
+            if file_format in ['jpeg', 'jpg', 'webp']:
+                save_kwargs['quality'] = quality
+            if file_format == 'png':
+                save_kwargs['compress_level'] = 9 - (quality // 11)  # Map 0-100 to 9-0
+
+            # Convert to RGB for JPEG if needed
+            if file_format == 'jpeg' and cropped_image.mode in ('RGBA', 'LA'):
+                background = Image.new('RGB', cropped_image.size, (255, 255, 255))
+                background.paste(cropped_image, mask=cropped_image.split()[-1])
+                cropped_image = background
+            elif cropped_image.mode == 'P':
+                cropped_image = cropped_image.convert('RGB')
+
+            # Save the image
+            cropped_image.save(output_path, format=file_format.upper(), **save_kwargs)
+            
+            # Show success message
+            QMessageBox.information(self, "Success", f"Image successfully saved to:\n{output_path}")
+            
+            # Update the current PIL image to the cropped version
+            self.current_pil_image = cropped_image
+            
         except Exception as e:
-            QMessageBox.critical(self, "Save Error", f"Failed to save cropped image: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to save cropped image: {str(e)}")
+            print(f"Error in crop_and_save: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     def on_aspect_ratio_changed(self, checked):
         """Handle aspect ratio radio button toggled."""
@@ -1283,14 +1573,18 @@ class CropperTool(QWidget):
             return
             
         btn = self.sender()
-        if btn.text() == "Custom":
+        if btn.text() == "Free Form":
+            # No fixed aspect ratio
+            self.crop_area.set_aspect_ratio(0, 0)
+        elif btn.text() == "Custom":
             # Use custom values
             width = self.custom_width.value()
             height = self.custom_height.value()
             self.crop_area.set_aspect_ratio(width, height)
         else:
-            # Use preset values
-            self.crop_area.set_aspect_ratio(btn.w, btn.h)
+            # Use preset values from the button's w and h attributes
+            if hasattr(btn, 'w') and hasattr(btn, 'h'):
+                self.crop_area.set_aspect_ratio(btn.w, btn.h)
     
     def update_custom_aspect_ratio(self):
         """Update aspect ratio when custom values change."""
@@ -1316,3 +1610,86 @@ class CropperTool(QWidget):
     def on_crop_changed(self, rect):
         """Handle crop area changed event."""
         self.update_ui_state()
+
+    # --- Transformation Handlers ---
+    def _handle_rotate_left(self):
+        if hasattr(self, 'crop_area') and self.crop_area.original_pixmap:
+            self.crop_area.rotate_image(-90) # Counter-clockwise
+            self._update_pil_image_safely()
+
+    def _handle_rotate_right(self):
+        if hasattr(self, 'crop_area') and self.crop_area.original_pixmap:
+            self.crop_area.rotate_image(90) # Clockwise
+            self._update_pil_image_safely()
+
+    def _handle_flip_horizontal(self):
+        if hasattr(self, 'crop_area') and self.crop_area.original_pixmap:
+            self.crop_area.flip_horizontal_image()
+            self._update_pil_image_safely()
+
+    def _handle_flip_vertical(self):
+        if hasattr(self, 'crop_area') and self.crop_area.original_pixmap:
+            self.crop_area.flip_vertical_image()
+            self._update_pil_image_safely()
+            
+    def _update_pil_image_safely(self):
+        """Safely update the PIL image from the current QPixmap."""
+        if not hasattr(self, 'crop_area') or not self.crop_area.original_pixmap:
+            self.current_pil_image = None
+            return
+            
+        try:
+            # Get the current image path if available
+            current_path = getattr(self, 'current_image_path', None)
+            if current_path and os.path.exists(current_path):
+                # Reload from original file for better quality
+                self.current_pil_image = Image.open(current_path)
+                return
+                
+            # Fallback to QPixmap conversion if no file path is available
+            qimage = self.crop_area.original_pixmap.toImage()
+            if qimage.isNull():
+                self.current_pil_image = None
+                return
+                
+            # Convert to ARGB32 format for reliable processing
+            qimage = qimage.convertToFormat(QImage.Format_ARGB32)
+            
+            # Get image data
+            width = qimage.width()
+            height = qimage.height()
+            ptr = qimage.bits()
+            
+            # Ensure we have valid image data
+            if not ptr or width <= 0 or height <= 0:
+                self.current_pil_image = None
+                return
+                
+            # Convert QImage to numpy array
+            try:
+                # For PyQt5
+                ptr.setsize(qimage.byteCount())
+            except AttributeError:
+                # For PySide2 or other bindings
+                ptr.setsize(height * qimage.bytesPerLine())
+                
+            arr = np.frombuffer(ptr, np.uint8).reshape((height, width, 4))  # RGBA
+            
+            # Create PIL image and ensure it's in RGB/RGBA mode
+            pil_image = Image.fromarray(arr, 'RGBA')
+            if pil_image.mode == 'RGBA' and not pil_image.getextrema()[3] == (255, 255):
+                # If no alpha channel is used, convert to RGB
+                pil_image = pil_image.convert('RGB')
+            
+            # Store the PIL image
+            self.current_pil_image = pil_image
+            
+        except Exception as e:
+            print(f"Error updating PIL image: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            self.current_pil_image = None
+    
+    def _update_pil_image_from_crop_area(self):
+        """Legacy method that now just calls the safe update method."""
+        self._update_pil_image_safely()
