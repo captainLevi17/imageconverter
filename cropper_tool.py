@@ -991,6 +991,64 @@ class CropperTool(QWidget):
         """)
         preview_layout = QVBoxLayout(preview_group)
         preview_layout.setContentsMargins(4, 16, 4, 4)
+        preview_layout.setSpacing(8)
+        
+        # Thumbnail gallery at the top
+        thumbnail_group = QGroupBox("Images")
+        thumbnail_group.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+                margin-top: 10px;
+                padding: 4px 0 8px 0;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """)
+        thumbnail_group_layout = QVBoxLayout(thumbnail_group)
+        thumbnail_group_layout.setContentsMargins(4, 14, 4, 4)
+        
+        # Buttons for adding/clearing images
+        btn_layout = QHBoxLayout()
+        btn_layout.setContentsMargins(4, 0, 4, 4)
+        
+        self.add_images_button = QPushButton(QIcon.fromTheme("list-add"), "Add Images")
+        self.add_images_button.clicked.connect(self.browse_images)
+        self.clear_button = QPushButton(QIcon.fromTheme("list-remove"), "Clear")
+        self.clear_button.clicked.connect(self.clear_images)
+        
+        btn_layout.addWidget(self.add_images_button)
+        btn_layout.addWidget(self.clear_button)
+        btn_layout.addStretch()
+        
+        # Scroll area for thumbnails
+        self.thumbnail_scroll = QScrollArea()
+        self.thumbnail_scroll.setWidgetResizable(True)
+        self.thumbnail_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.thumbnail_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.thumbnail_scroll.setFixedHeight(150)  # Fixed height for horizontal scrolling
+        
+        # Container widget for the thumbnails
+        self.thumbnail_container = QWidget()
+        self.thumbnail_layout = QHBoxLayout(self.thumbnail_container)
+        self.thumbnail_layout.setContentsMargins(5, 5, 5, 5)
+        self.thumbnail_layout.setSpacing(5)
+        self.thumbnail_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        
+        # Add a stretch to keep thumbnails left-aligned
+        self.thumbnail_layout.addStretch()
+        
+        self.thumbnail_scroll.setWidget(self.thumbnail_container)
+        
+        # Add widgets to thumbnail group
+        thumbnail_group_layout.addLayout(btn_layout)
+        thumbnail_group_layout.addWidget(self.thumbnail_scroll)
+        
+        # Add thumbnail group to preview layout
+        preview_layout.addWidget(thumbnail_group)
         
         # Crop area (the only widget that displays the image)
         self.crop_area = CropArea()
@@ -1034,48 +1092,67 @@ class CropperTool(QWidget):
             }
         """
         
-        # File selection
-        file_group = QGroupBox("Image Selection")
-        file_group.setStyleSheet(group_style)
-        file_layout = QVBoxLayout(file_group)
-        file_layout.setContentsMargins(6, 16, 6, 6)
-        file_layout.setSpacing(8)
+        # Output settings group
+        output_group = QGroupBox("Output Settings")
+        output_group.setStyleSheet(group_style)
+        output_layout = QVBoxLayout(output_group)
+        output_layout.setContentsMargins(8, 16, 8, 8)
+        output_layout.setSpacing(8)
         
-        # Create scroll area for thumbnails
-        self.thumbnail_scroll = QScrollArea()
-        self.thumbnail_scroll.setWidgetResizable(True)
-        self.thumbnail_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.thumbnail_scroll.setMinimumHeight(150)
+        # Format and quality settings
+        format_quality_layout = QHBoxLayout()
         
-        # Container widget that will contain the grid
-        self.thumbnail_container = QWidget()
-        self.thumbnail_layout = QVBoxLayout(self.thumbnail_container)
-        self.thumbnail_layout.setContentsMargins(5, 5, 5, 5)
+        # Format selection
+        format_layout = QHBoxLayout()
+        format_layout.addWidget(QLabel("Format:"))
+        self.format_combo = QComboBox()
+        self.format_combo.addItems(["JPEG", "PNG", "WebP"])
+        self.format_combo.setCurrentText("JPEG")
+        format_layout.addWidget(self.format_combo, 1)
+        format_quality_layout.addLayout(format_layout)
         
-        # Grid layout for thumbnails
-        self.thumbnail_grid = QGridLayout()
-        self.thumbnail_grid.setSpacing(5)
-        self.thumbnail_grid.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        # Quality setting
+        quality_layout = QHBoxLayout()
+        quality_layout.addWidget(QLabel("Quality:"))
+        self.quality_slider = QSpinBox()
+        self.quality_slider.setRange(1, 100)
+        self.quality_slider.setValue(90)
+        self.quality_slider.setSuffix("%")
+        quality_layout.addWidget(self.quality_slider, 1)
+        format_quality_layout.addLayout(quality_layout)
         
-        # Add grid to container
-        self.thumbnail_layout.addLayout(self.thumbnail_grid)
-        self.thumbnail_layout.addStretch(1)  # Push thumbnails to top
+        output_layout.addLayout(format_quality_layout)
         
-        # Set up the scroll area
-        self.thumbnail_scroll.setWidget(self.thumbnail_container)
-        file_layout.addWidget(self.thumbnail_scroll)
-
-        buttons_layout = QHBoxLayout()
-        self.add_images_button = QPushButton(QIcon.fromTheme("list-add"), "Add Images")
-        self.add_images_button.clicked.connect(self.browse_images)
-        self.clear_button = QPushButton(QIcon.fromTheme("list-remove"), "Clear")
-        self.clear_button.clicked.connect(self.clear_images)
+        # Filename options
+        filename_layout = QGridLayout()
+        filename_layout.setColumnStretch(1, 1)
         
-        buttons_layout.addWidget(self.add_images_button)
-        buttons_layout.addWidget(self.clear_button)
+        self.filename_prefix_input = QLineEdit()
+        self.filename_suffix_input = QLineEdit("_cropped")
+        self.overwrite_checkbox = QCheckBox("Overwrite existing files")
         
-        file_layout.addLayout(buttons_layout)
-        file_group.setLayout(file_layout)
+        filename_layout.addWidget(QLabel("Prefix:"), 0, 0)
+        filename_layout.addWidget(self.filename_prefix_input, 0, 1)
+        filename_layout.addWidget(QLabel("Suffix:"), 1, 0)
+        filename_layout.addWidget(self.filename_suffix_input, 1, 1)
+        filename_layout.addWidget(self.overwrite_checkbox, 2, 0, 1, 2)
+        
+        # Output directory selection
+        output_dir_layout = QHBoxLayout()
+        self.output_dir_button = QPushButton("Choose Output Directory")
+        self.output_dir_button.clicked.connect(self.choose_output_dir)
+        self.output_dir_label = QLabel("Not Set")
+        self.output_dir_label.setWordWrap(True)
+        self.output_dir_label.setStyleSheet("color: #666;")
+        
+        output_dir_layout.addWidget(QLabel("Save to:"))
+        output_dir_layout.addWidget(self.output_dir_label, 1)
+        output_dir_layout.addWidget(self.output_dir_button)
+        
+        # Add all widgets to the output group
+        output_layout.addLayout(filename_layout)
+        output_layout.addLayout(output_dir_layout)
+        output_layout.addStretch(1)
         
         # Aspect ratio presets
         aspect_group = QGroupBox("Aspect Ratio")
@@ -1195,99 +1272,49 @@ class CropperTool(QWidget):
         transform_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         control_layout.addWidget(transform_group, 0, Qt.AlignTop)
 
-        # Output options
-        output_group = QGroupBox("Output Options")
-        output_group.setStyleSheet(group_style)
-        output_layout = QVBoxLayout(output_group)
-        output_layout.setContentsMargins(8, 20, 8, 8)
-        output_layout.setSpacing(8)
-        
-        format_layout = QHBoxLayout()
-        format_layout.addWidget(QLabel("Format:"))
-        self.format_combo = QComboBox()
-        self.format_combo.addItems(["JPEG", "PNG", "WebP"])
-        self.format_combo.setCurrentText("JPEG")
-        format_layout.addWidget(self.format_combo)
-        
-        quality_layout = QHBoxLayout()
-        quality_layout.addWidget(QLabel("Quality:"))
-        self.quality_slider = QSpinBox()
-        self.quality_slider.setRange(1, 100)
-        self.quality_slider.setValue(90)
-        self.quality_slider.setSuffix("%")
-        quality_layout.addWidget(self.quality_slider)
-        
-        filename_layout = QGridLayout()
-        self.filename_prefix_input = QLineEdit()
-        self.filename_suffix_input = QLineEdit("_cropped")
-        self.overwrite_checkbox = QCheckBox("Overwrite existing files")
-        filename_layout.addWidget(QLabel("Prefix:"), 0, 0)
-        filename_layout.addWidget(self.filename_prefix_input, 0, 1)
-        filename_layout.addWidget(QLabel("Suffix:"), 1, 0)
-        filename_layout.addWidget(self.filename_suffix_input, 1, 1)
-        filename_layout.addWidget(self.overwrite_checkbox, 2, 0, 1, 2)
-        output_layout.addLayout(format_layout)
-        output_layout.addLayout(quality_layout)
-        output_layout.addLayout(filename_layout)
-
-        output_dir_layout = QHBoxLayout()
-        self.output_dir_button = QPushButton("Choose Output Directory")
-        self.output_dir_button.clicked.connect(self.choose_output_dir)
-        output_dir_layout.addWidget(self.output_dir_button)
-        self.output_dir_label = QLabel("Output: Not Set")
-        self.output_dir_label.setWordWrap(True)
-        output_dir_layout.addWidget(self.output_dir_label, 1)
-        output_layout.addLayout(output_dir_layout)
-        output_group.setLayout(output_layout)
-        
-        # Action buttons
-        action_buttons_group = QGroupBox("Actions")
-        action_buttons_group.setStyleSheet(group_style)
-        action_buttons_layout = QVBoxLayout(action_buttons_group)
-        action_buttons_layout.setContentsMargins(8, 20, 8, 8)
-        
         # Style for action buttons
         action_btn_style = """
             QPushButton {
-                padding: 8px 12px;
-                font-size: 13px;
+                padding: 12px 24px;
+                font-size: 14px;
                 font-weight: bold;
-                border: 1px solid #4a7eb3;
+                border: none;
                 border-radius: 4px;
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                          stop:0 #5d9cec, stop:1 #4a89dc);
+                background-color: #4CAF50;
                 color: white;
-                min-width: 120px;
+                min-width: 180px;
+                margin: 10px 0;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                          stop:0 #6aa8ff, stop:1 #5d9cec);
-                border: 1px solid #3a6da4;
+                background-color: #45a049;
             }
             QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                                          stop:0 #4a89dc, stop:1 #5d9cec);
-                padding-top: 9px;
-                padding-bottom: 7px;
+                background-color: #3d8b40;
+                padding-top: 13px;
+                padding-bottom: 11px;
             }
             QPushButton:disabled {
-                background: #cccccc;
-                border: 1px solid #aaaaaa;
-                color: #888888;
+                background-color: #cccccc;
+                color: #666666;
             }
         """
+        
+        # Create action buttons group
+        actions_group = QGroupBox("Actions")
+        actions_group.setStyleSheet(group_style)
+        actions_layout = QVBoxLayout(actions_group)
+        actions_layout.setContentsMargins(8, 20, 8, 8)
         
         self.crop_button = QPushButton(QIcon.fromTheme("image-crop"), "Crop & Save")
         self.crop_button.setStyleSheet(action_btn_style)
         self.crop_button.clicked.connect(self.crop_and_save)
-        action_buttons_layout.addWidget(self.crop_button, 0, Qt.AlignCenter)
+        actions_layout.addWidget(self.crop_button, 0, Qt.AlignCenter)
         
         # Add all groups to the scroll layout
-        scroll_layout.addWidget(file_group)
         scroll_layout.addWidget(aspect_group)
         scroll_layout.addWidget(transform_group)
         scroll_layout.addWidget(output_group)
-        scroll_layout.addWidget(action_buttons_group)
+        scroll_layout.addWidget(actions_group)
         scroll_layout.addStretch(1)  # Pushes controls to the top
         
         # Set up main layout
@@ -1310,13 +1337,36 @@ class CropperTool(QWidget):
         self.clear_button.setEnabled(has_images)
         
         current_item_selected = self.current_selected_thumbnail_item is not None
-        self.crop_button.setEnabled(has_images and current_item_selected and self.crop_area.selection_rect().isValid() and self.output_dir is not None)
-        self.format_combo.setEnabled(has_images and current_item_selected)
-        self.filename_prefix_input.setEnabled(has_images and current_item_selected)
-        self.filename_suffix_input.setEnabled(has_images and current_item_selected)
-        self.overwrite_checkbox.setEnabled(has_images and current_item_selected)
-        self.output_dir_button.setEnabled(True) # Always enabled
-        self.output_dir_label.setText(f"Output: {self.output_dir}" if self.output_dir else "Output: Not Set")
+        has_valid_selection = has_images and current_item_selected and hasattr(self, 'crop_area') and self.crop_area.selection_rect().isValid()
+        
+        # Enable/disable controls based on selection
+        self.crop_button.setEnabled(has_valid_selection and self.output_dir is not None)
+        self.format_combo.setEnabled(has_valid_selection)
+        self.quality_slider.setEnabled(has_valid_selection)
+        self.filename_prefix_input.setEnabled(has_valid_selection)
+        self.filename_suffix_input.setEnabled(has_valid_selection)
+        self.overwrite_checkbox.setEnabled(has_valid_selection)
+        self.output_dir_button.setEnabled(True)  # Always enabled
+        
+        # Update output directory display
+        if hasattr(self, 'output_dir_label') and self.output_dir:
+            # Show just the last part of the path if it's long
+            display_path = self.output_dir
+            if len(display_path) > 30:
+                display_path = '...' + display_path[-27:]
+            self.output_dir_label.setText(display_path)
+            self.output_dir_label.setToolTip(self.output_dir)
+        elif hasattr(self, 'output_dir_label'):
+            self.output_dir_label.setText("Not Set")
+            self.output_dir_label.setToolTip("")
+            
+        # Show warning if no valid selection
+        if has_images and current_item_selected and not hasattr(self, 'crop_area'):
+            self.crop_button.setToolTip("Draw a selection on the image")
+        elif not has_valid_selection:
+            self.crop_button.setToolTip("Select an image and draw a crop area")
+        else:
+            self.crop_button.setToolTip("Crop and save the selected area")
 
     def browse_images(self):
         """Open file dialog to select images."""
@@ -1344,32 +1394,44 @@ class CropperTool(QWidget):
             item.clicked.connect(self._on_cropper_thumbnail_clicked)
             self.thumbnail_items.append(item)
             
-            # Calculate row and column for the grid
-            num_items = len(self.thumbnail_items) - 1  # 0-indexed
-            row = num_items // THUMBNAIL_GRID_COLUMNS
-            col = num_items % THUMBNAIL_GRID_COLUMNS
-            self.thumbnail_grid.addWidget(item, row, col)
+            # Insert before the stretch item to keep thumbnails left-aligned
+            if hasattr(self, 'thumbnail_layout') and self.thumbnail_layout is not None:
+                # Remove the stretch temporarily
+                stretch = self.thumbnail_layout.takeAt(self.thumbnail_layout.count() - 1)
+                # Add the new item
+                self.thumbnail_layout.addWidget(item)
+                # Add the stretch back
+                self.thumbnail_layout.addItem(stretch)
             
             # Update the container's minimum size to fit all thumbnails
             self.thumbnail_container.adjustSize()
             
-            # Ensure the container has a minimum width
-            min_width = (CROPPER_THUMB_ITEM_WIDTH + 10) * min(THUMBNAIL_GRID_COLUMNS, len(self.thumbnail_items))
+            # Ensure the container has a minimum width to show all thumbnails
+            min_width = (CROPPER_THUMB_ITEM_WIDTH + 10) * len(self.thumbnail_items)
             self.thumbnail_container.setMinimumWidth(min_width)
 
         except Exception as e:
             print(f"Error creating thumbnail item for {image_path}: {e}")
             traceback.print_exc()
-            # Optionally, add a placeholder or skip
-            error_label = QLabel(f"Error loading:\n{os.path.basename(image_path)}", self.thumbnail_container_widget)
-            error_label.setWordWrap(True)
-            error_label.setStyleSheet("color: red; border: 1px solid red; padding: 5px;")
-            error_label.setFixedSize(CROPPER_THUMB_ITEM_WIDTH, CROPPER_THUMB_ITEM_HEIGHT)
-            num_items = len(self.thumbnail_items) # Current count before adding error label as a placeholder
-            row = num_items // THUMBNAIL_GRID_COLUMNS
-            col = num_items % THUMBNAIL_GRID_COLUMNS
-            self.thumbnail_layout.addWidget(error_label, row, col)
-            # We don't add error_label to self.thumbnail_items as it's not a CropperThumbnailItem
+            # Add error placeholder
+            try:
+                error_label = QLabel(f"Error loading:\n{os.path.basename(image_path)}", self.thumbnail_container)
+                error_label.setWordWrap(True)
+                error_label.setStyleSheet("color: red; border: 1px solid red; padding: 5px;")
+                error_label.setFixedSize(CROPPER_THUMB_ITEM_WIDTH, CROPPER_THUMB_ITEM_HEIGHT)
+                
+                # Insert before the stretch item
+                if hasattr(self, 'thumbnail_layout') and self.thumbnail_layout is not None:
+                    # Remove the stretch temporarily
+                    stretch = self.thumbnail_layout.takeAt(self.thumbnail_layout.count() - 1)
+                    # Add the error label
+                    self.thumbnail_layout.addWidget(error_label)
+                    # Add the stretch back
+                    self.thumbnail_layout.addItem(stretch)
+                    
+            except Exception as inner_e:
+                print(f"Error creating error label: {inner_e}")
+                traceback.print_exc()
 
     def _on_cropper_thumbnail_clicked(self, image_path: str):
         """Handles thumbnail clicks from CropperThumbnailItem instances."""
@@ -1388,34 +1450,7 @@ class CropperTool(QWidget):
         
         clicked_item.set_selected(True)
         self.current_selected_thumbnail_item = clicked_item
-        
         self.load_image_into_cropper(image_path)
-        self.update_ui_state()
-
-    def clear_images(self):
-        """Clear the current image selection and gallery."""
-        # Clear all items from the grid layout
-        for i in reversed(range(self.thumbnail_grid.count())): 
-            item = self.thumbnail_grid.itemAt(i)
-            if item.widget():
-                item.widget().deleteLater()
-        
-        # Clear the thumbnail items list
-        self.thumbnail_items.clear()
-        self.image_paths.clear()  # Also clear the general list of paths
-        self.current_selected_thumbnail_item = None
-        
-        # Reset the container's minimum width
-        if hasattr(self, 'thumbnail_container'):
-            self.thumbnail_container.setMinimumWidth(0)
-        
-        # Clear the crop area and current image
-        if hasattr(self, 'crop_area') and self.crop_area:
-            self.crop_area.clear_pixmap()
-        self.current_pil_image = None
-        
-        # Reset the output directory
-        self.output_dir = None
         self.update_ui_state()
 
     def load_image_into_cropper(self, image_path: str):
@@ -1601,10 +1636,15 @@ class CropperTool(QWidget):
     
     def choose_output_dir(self):
         """Open dialog to choose output directory."""
-        dir_path = QFileDialog.getExistingDirectory(self, "Choose Output Directory", self.output_dir or QStandardPaths.writableLocation(QStandardPaths.PicturesLocation))
+        dir_path = QFileDialog.getExistingDirectory(
+            self, 
+            "Choose Output Directory", 
+            self.output_dir or QStandardPaths.writableLocation(QStandardPaths.PicturesLocation)
+        )
         if dir_path:
             self.output_dir = dir_path
             self.output_dir_label.setText(f"Output: {self.output_dir}")
+            self.output_dir_label.setToolTip(dir_path)
             self.update_ui_state()
 
     def on_crop_changed(self, rect):
@@ -1693,3 +1733,31 @@ class CropperTool(QWidget):
     def _update_pil_image_from_crop_area(self):
         """Legacy method that now just calls the safe update method."""
         self._update_pil_image_safely()
+        
+    def clear_images(self):
+        """Clear all thumbnails and reset the crop area."""
+        # Clear the current selection
+        self.current_selected_thumbnail_item = None
+        
+        # Clear the crop area
+        if hasattr(self, 'crop_area') and self.crop_area is not None:
+            self.crop_area.clear_pixmap()
+        
+        # Clear the PIL image reference
+        self.current_pil_image = None
+        
+        # Clear the thumbnail items
+        for item in self.thumbnail_items:
+            item.setParent(None)
+            item.deleteLater()
+        self.thumbnail_items.clear()
+        
+        # Reset the image paths
+        self.image_paths = []
+        
+        # Reset the container's minimum width
+        if hasattr(self, 'thumbnail_container'):
+            self.thumbnail_container.setMinimumWidth(0)
+        
+        # Update the UI state
+        self.update_ui_state()

@@ -10,13 +10,18 @@
 - Added comprehensive test suite for core functionality
 - Added test coverage reporting
 - Implemented CI-ready test configuration
-- Added aspect ratio presets (e.g., 1:1, 16:9, 4:3, Free) to the Image Cropper tool.
+- Added aspect ratio presets (e.g., 1:1, 16:9, 4:3, Free) to the Image Cropper tool
+- Added image transformation controls (rotate, flip) to the Image Cropper
+- Implemented output format and quality settings for the Image Cropper
 
 ### Fixed
 - Fixed HEIC converter tab visibility when pillow-heif is installed
 - Improved error handling in image processing tools
 - Fixed memory management in batch processing
-- Resolved image cropper accuracy issues by refining coordinate calculations and using `round()` for precision.
+- Resolved image cropper accuracy issues by refining coordinate calculations and using `round()` for precision
+- Fixed duplicate UI elements in the Image Cropper output settings
+- Improved layout and organization of the Image Cropper interface
+- Fixed issues with output directory selection and file naming
 
 ## [0.5.0] - 2025-05-26
 ### Added

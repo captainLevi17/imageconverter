@@ -16,7 +16,6 @@
   - [x] Image Cropper
 
 ## 🚧 In Development
-- [ ] Implement Image Cropper tool
 - [ ] Add keyboard shortcuts
 - [ ] Implement settings system
 - [ ] Enhance test coverage for all tools
