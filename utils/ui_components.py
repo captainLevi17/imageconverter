@@ -14,6 +14,7 @@ from PyQt5.QtGui import QPixmap, QImage
 from typing import List, Optional, Dict, Any
 import os
 from pathlib import Path
+from PIL import Image
 
 from .image_utils import load_image, create_thumbnail
 from .file_utils import get_file_size
@@ -75,32 +76,41 @@ class ImagePreviewGallery(QWidget):
             parent: Parent widget.
         """
         super().__init__(parent)
+        # Set size policy to expand in both directions
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
         # Store thumbnails and their widgets
         self.thumbnails = {}  # path -> thumbnail widget
         
-        # Create scroll area
+        # Create scroll area with better styling
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QScrollArea.NoFrame)
         
-        # Create container widget for thumbnails
+        # Create container widget for thumbnails with compact size
         self.container = QWidget()
-        self.container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.container.setMinimumHeight(200)  # More compact height
         
-        # Use grid layout for thumbnails
+        # Use grid layout for thumbnails with tighter spacing
         self.grid_layout = QGridLayout()
-        self.grid_layout.setSpacing(5)
-        self.grid_layout.setContentsMargins(5, 5, 5, 5)
+        self.grid_layout.setSpacing(6)
+        self.grid_layout.setContentsMargins(8, 8, 8, 8)
+        self.grid_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.container.setLayout(self.grid_layout)
         
         # Set the container as the scroll area's widget
         self.scroll_area.setWidget(self.container)
+        self.scroll_area.setWidgetResizable(True)
         
-        # Main layout
-        main_layout = QGridLayout(self)
+        # Main layout that fills available space
+        main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         main_layout.addWidget(self.scroll_area)
+        
+        # Set compact height for the widget
+        self.setMinimumHeight(200)  # More compact height
     
     def clear(self) -> None:
         """Clear all thumbnails from the gallery."""
@@ -113,7 +123,7 @@ class ImagePreviewGallery(QWidget):
         # Clear the thumbnails dictionary
         self.thumbnails.clear()
     
-    def add_thumbnail(self, path: str, thumbnail_size: tuple = (120, 120)) -> None:
+    def add_thumbnail(self, path: str, thumbnail_size: tuple = (80, 80)) -> None:
         """Add a thumbnail for the given image path.
         
         Args:
@@ -124,18 +134,24 @@ class ImagePreviewGallery(QWidget):
             return  # Already added
         
         try:
-            # Create a thumbnail label
+            # Create a compact thumbnail label
             thumbnail = ThumbnailLabel()
+            thumbnail.setMinimumSize(60, 60)
             
             # Load and set the thumbnail
             img = load_image(path)
             if img:
                 # Create a thumbnail
-                img.thumbnail(thumbnail_size)
+                img.thumbnail(thumbnail_size, Image.Resampling.LANCZOS)
                 
                 # Convert to QPixmap and set
-                data = img.tobytes('raw', img.mode)
-                qimage = QImage(data, img.size[0], img.size[1], QImage.Format_RGB888)
+                if img.mode == 'RGB':
+                    qimage = QImage(img.tobytes(), img.width, img.height, QImage.Format_RGB888)
+                else:
+                    # Convert to RGB if not already
+                    img = img.convert('RGB')
+                    qimage = QImage(img.tobytes(), img.width, img.height, QImage.Format_RGB888)
+                
                 pixmap = QPixmap.fromImage(qimage)
                 thumbnail.setPixmap(pixmap)
                 
@@ -145,10 +161,10 @@ class ImagePreviewGallery(QWidget):
                 # Connect click event
                 thumbnail.mousePressEvent = lambda e, p=path: self.on_thumbnail_clicked(p)
                 
-                # Add to layout
+                # Add to layout - use 3 columns for larger thumbnails
                 position = len(self.thumbnails)
-                row = position // 4  # 4 columns
-                col = position % 4
+                row = position // 3  # 3 columns
+                col = position % 3
                 
                 self.grid_layout.addWidget(thumbnail, row, col)
                 self.thumbnails[path] = thumbnail
