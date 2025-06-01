@@ -1,11 +1,24 @@
 import os
 import sys
-from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-                            QFileDialog, QProgressBar, QScrollArea, QGridLayout, 
-                            QSizePolicy, QComboBox, QGroupBox, QMessageBox, QCheckBox)
-from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QPixmap, QImage
-from PIL import Image
+from pathlib import Path
+from typing import List, Optional, Dict, Any
+
+from PyQt5.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QFileDialog, QProgressBar, QScrollArea, QGridLayout,
+    QSizePolicy, QComboBox, QGroupBox, QMessageBox, QCheckBox, QRadioButton, QButtonGroup
+)
+from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
+from PyQt5.QtGui import QPixmap, QImage, QPainter
+from PIL import Image, ImageQt
+
+# Import base tool and utilities
+from utils.base_tool import BaseTool
+from utils.ui_components import (
+    ThumbnailLabel, ImagePreviewGallery, OutputDirSelector, FileControls
+)
+from utils.image_utils import ImageData, load_image
+from utils.file_utils import get_file_size, create_directory
 
 # Try to import pillow_heif but don't initialize it yet
 HEIC_SUPPORT = False
@@ -15,29 +28,13 @@ try:
 except ImportError:
     print("Warning: pillow-heif not found. HEIC support will be disabled.")
 
-import io
-
-class ThumbnailLabel(QLabel):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setAlignment(Qt.AlignCenter)
-        self.setMinimumSize(120, 120)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.setStyleSheet("""
-            border: 1px solid #ddd;
-            margin: 2px;
-            padding: 2px;
-        """)
-
-class HEICConverterTool(QWidget):
+class HEICConverterTool(BaseTool):
     def __init__(self):
-        super().__init__()
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.image_paths = []
-        self.current_preview = None
-        self.current_path = None
-        self.output_dir = None
+        # Initialize instance variables first
+        self.output_dir = str(Path.home() / "Pictures" / "HEIC_Converted")
         self.heic_supported = HEIC_SUPPORT
+        self.worker_thread = None
+        self.conversion_in_progress = False
         
         # Initialize pillow_heif if available
         if self.heic_supported:
@@ -46,67 +43,66 @@ class HEICConverterTool(QWidget):
             except Exception as e:
                 print(f"Error initializing HEIC support: {e}")
                 self.heic_supported = False
-                
-        self.init_ui()
+        
+        # Initialize parent class which will call setup_ui and setup_tool_controls
+        super().__init__("HEIC Converter")
+        
+        # Setup output directory
+        success, message = create_directory(self.output_dir)
+        if not success:
+            # If default directory creation fails, use system temp directory
+            import tempfile
+            self.output_dir = str(Path(tempfile.gettempdir()) / "imageconverter" / "heic_converted")
+            success, message = create_directory(self.output_dir)
+            if not success:
+                print(f"Warning: Could not create output directory: {message}")
+                self.output_dir = str(Path.home() / "Pictures")
     
-    def init_ui(self):
-        main_layout = QHBoxLayout()
-        main_layout.setContentsMargins(5, 5, 5, 5)
-        
-        # Left panel - Preview
-        preview_group = QGroupBox("Preview Gallery")
-        preview_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        preview_layout = QVBoxLayout()
-        
-        # Thumbnail scroll area
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        self.thumbnail_container = QWidget()
-        self.thumbnail_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.thumbnail_layout = QGridLayout()
-        self.thumbnail_layout.setSpacing(5)
-        self.thumbnail_container.setLayout(self.thumbnail_layout)
-        scroll.setWidget(self.thumbnail_container)
-        preview_layout.addWidget(scroll, stretch=1)
-        
-        # Main preview
-        self.main_preview = QLabel()
-        self.main_preview.setAlignment(Qt.AlignCenter)
-        self.main_preview.setMinimumSize(400, 300)
-        self.main_preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        preview_layout.addWidget(QLabel("Selected Preview:"))
-        preview_layout.addWidget(self.main_preview, stretch=2)
-        
-        # Add info labels below main preview
-        self.size_info = QLabel()
-        self.size_info.setAlignment(Qt.AlignCenter)
-        self.size_info.setStyleSheet("font-size: 10px; color: #555;")
-        preview_layout.addWidget(self.size_info)
-        
-        preview_group.setLayout(preview_layout)
-        
-        # Right panel - Controls
-        control_group = QGroupBox("HEIC to JPG Converter")
+    def setup_control_panel(self) -> None:
+        """Set up the control panel with tool-specific controls."""
+        control_group = QGroupBox("Controls")
         control_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         control_layout = QVBoxLayout()
         
-        # File selection
-        self.file_label = QLabel("No HEIC images selected (0)")
+        # File controls
+        self.file_controls = FileControls()
+        self.file_controls.browse_clicked.connect(self.browse_images)
+        self.file_controls.clear_clicked.connect(self.clear_images)
+        control_layout.addWidget(self.file_controls)
         
-        file_btn_layout = QHBoxLayout()
-        browse_btn = QPushButton("Add HEIC Images")
-        browse_btn.clicked.connect(self.browse_heic_images)
-        clear_btn = QPushButton("Clear")
-        clear_btn.clicked.connect(self.clear_images)
-        file_btn_layout.addWidget(browse_btn)
-        file_btn_layout.addWidget(clear_btn)
+        # Add tool-specific controls
+        self.setup_tool_controls(control_layout)
         
-        # Output format selection
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        control_layout.addWidget(self.progress_bar)
+        
+        control_group.setLayout(control_layout)
+        self.main_layout.addWidget(control_group, stretch=1)
+    
+    def setup_tool_controls(self, control_layout):
+        """Set up tool-specific controls.
+        
+        Args:
+            control_layout: The layout to add controls to
+        """
+        # Output directory
+        self.output_selector = OutputDirSelector()
+        self.output_selector.directory_changed.connect(self.set_output_directory)
+        control_layout.addWidget(self.output_selector)
+        
+        # Format and quality settings
+        settings_group = QGroupBox("Conversion Settings")
+        settings_layout = QVBoxLayout()
+        
+        # Format selection
         format_layout = QHBoxLayout()
         format_layout.addWidget(QLabel("Output Format:"))
         self.format_combo = QComboBox()
         self.format_combo.addItems(["JPEG", "PNG"])
         self.format_combo.setCurrentIndex(0)  # Default to JPEG
+        self.format_combo.currentTextChanged.connect(self.update_convert_button_text)
         format_layout.addWidget(self.format_combo)
         
         # Quality settings
@@ -117,253 +113,358 @@ class HEICConverterTool(QWidget):
         self.quality_spin.setCurrentIndex(1)  # Default to High (90)
         quality_layout.addWidget(self.quality_spin)
         
-        # Output directory
-        self.output_dir_btn = QPushButton("Select Output Directory")
-        self.output_dir_btn.clicked.connect(self.select_output_dir)
-        self.output_dir_label = QLabel("Output: Same as input")
-        
         # Options
         self.preserve_metadata = QCheckBox("Preserve metadata")
         self.preserve_metadata.setChecked(True)
         
-        # Progress bar
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
+        # Add to settings layout
+        settings_layout.addLayout(format_layout)
+        settings_layout.addLayout(quality_layout)
+        settings_layout.addWidget(self.preserve_metadata)
+        settings_group.setLayout(settings_layout)
         
         # Convert button
-        self.convert_btn = QPushButton("Convert to JPG")
+        self.convert_btn = QPushButton()
+        self.update_convert_button_text()  # Set initial text
+        self.convert_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+                min-width: 160px;
+                margin: 10px 0;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """)
         self.convert_btn.clicked.connect(self.convert_images)
         self.convert_btn.setEnabled(False)
         
         # Add to control layout
-        control_layout.addWidget(self.file_label)
-        control_layout.addLayout(file_btn_layout)
-        control_layout.addWidget(self.output_dir_btn)
-        control_layout.addWidget(self.output_dir_label)
-        control_layout.addSpacing(10)
-        control_layout.addLayout(format_layout)
-        control_layout.addLayout(quality_layout)
-        control_layout.addWidget(self.preserve_metadata)
-        control_layout.addStretch()
-        control_layout.addWidget(self.progress_bar)
+        control_layout.addWidget(settings_group)
         control_layout.addWidget(self.convert_btn)
-        
-        control_group.setLayout(control_layout)
-        
-        # Add to main layout
-        main_layout.addWidget(preview_group, 70)
-        main_layout.addWidget(control_group, 30)
-        self.setLayout(main_layout)
+        control_layout.addStretch()
     
-    def browse_heic_images(self):
+    def browse_images(self):
+        """Handle image selection with HEIC/HEIF file filter."""
         if not self.heic_supported:
             QMessageBox.warning(self, 'HEIC Not Supported', 
                 'HEIC support is not available. Please install pillow-heif package.')
             return
             
+        # Set file filter to only show HEIC/HEIF files by default
         paths, _ = QFileDialog.getOpenFileNames(
             self, 'Select HEIC Images', '', 
-            'HEIC Images (*.heic *.heif);;All Files (*)')
+            'HEIC/HEIF Images (*.heic *.heif);;All Files (*)')
             
         if paths:
             self.image_paths = paths
-            self.file_label.setText(f"Selected: {len(self.image_paths)} HEIC images")
+            self.file_controls.update_file_count(len(self.image_paths))
             self.convert_btn.setEnabled(True)
-            self.update_thumbnails()
+            
+            # Update preview with first image
+            if self.image_paths:
+                self.current_path = self.image_paths[0]
+                self.update_thumbnails()
+                self.update_main_preview()
     
     def clear_images(self):
+        """Clear all selected images and reset tool state."""
+        super().clear_images()
         self.image_paths = []
-        self.current_preview = None
-        self.current_path = None
-        self.file_label.setText("No HEIC images selected (0)")
+        self.file_controls.update_file_count(0)
         self.convert_btn.setEnabled(False)
-        self.clear_thumbnails()
-    
-    def clear_thumbnails(self):
-        # Clear existing thumbnails
-        for i in reversed(range(self.thumbnail_layout.count())): 
-            widget = self.thumbnail_layout.itemAt(i).widget()
-            if widget:
-                widget.setParent(None)
         
-        # Clear main preview if it exists
-        if hasattr(self, 'main_preview'):
-            self.main_preview.clear()
-        if hasattr(self, 'size_info'):
-            self.size_info.clear()
+        # Clear the thumbnail gallery if it exists
+        if hasattr(self, 'thumbnail_gallery'):
+            self.thumbnail_gallery.clear()
+            
+        # Clear the preview if it exists
+        if hasattr(self, 'preview_label'):
+            self.preview_label.clear()
     
     def update_thumbnails(self):
-        if not self.heic_supported:
+        """Update the thumbnail gallery with current images."""
+        if not hasattr(self, 'thumbnail_gallery') or not hasattr(self, 'image_paths') or not self.image_paths:
             return
             
-        self.clear_thumbnails()
+        # Clear existing thumbnails
+        self.thumbnail_gallery.clear()
         
-        # Create new thumbnails
-        for i, path in enumerate(self.image_paths):
-            try:
-                # Create thumbnail container
-                thumb_container = QWidget()
-                thumb_layout = QVBoxLayout(thumb_container)
+        # Add thumbnails for all images
+        for path in self.image_paths:
+            self.thumbnail_gallery.add_thumbnail(path)
                 
-                # Create thumbnail label
-                thumb_label = ThumbnailLabel()
+    def set_output_directory(self, path: Optional[str] = None) -> None:
+        """Set the output directory and update the UI."""
+        if path is None:
+            path = QFileDialog.getExistingDirectory(self, 'Select Output Directory')
+            
+        if path:  # User didn't cancel
+            self.output_dir = path
+            self.output_selector.directory = path
+    
+    def load_image_data(self, path: str):
+        """Load image data from the given path.
+        
+        Args:
+            path: Path to the image file
+            
+        Returns:
+            ImageData object with image information or None if loading fails
+        """
+        try:
+            # Use the image_utils.load_image function which handles HEIC via pillow_heif
+            return load_image(path, as_image_data=True)
+        except Exception as e:
+            print(f"Error loading image {path}: {str(e)}")
+            return None
+            
+    def update_main_preview(self):
+        """Update the main preview with the current image."""
+        if not hasattr(self, 'current_path') or not self.current_path:
+            return
+            
+        try:
+            # Load the image data first
+            self.current_preview = self.load_image_data(self.current_path)
+            if not self.current_preview:
+                raise ValueError("Failed to load image data")
                 
-                # Load HEIC image using pillow_heif
+            # Convert HEIC to a temporary JPEG for preview
+            if str(self.current_path).lower().endswith(('.heic', '.heif')):
+                import tempfile
+                import os
+                
+                # Create a temporary file
+                fd, temp_path = tempfile.mkstemp(suffix='.jpg')
+                os.close(fd)
+                
                 try:
-                    image = Image.open(path)
-                    # Ensure image is in RGB mode for display
-                    if image.mode != 'RGB':
-                        image = image.convert('RGB')
+                    # Save the image as JPEG
+                    img = self.current_preview.image
+                    if img.mode != 'RGB':
+                        img = img.convert('RGB')
+                    img.save(temp_path, 'JPEG', quality=90)
                     
-                    # Create thumbnail
-                    thumb_size = QSize(100, 100)
-                    thumb = image.copy()
-                    thumb.thumbnail((thumb_size.width(), thumb_size.height()))
+                    # Update the current path to the temporary file
+                    original_path = self.current_path
+                    self.current_path = temp_path
                     
-                    # Convert to QPixmap and set to label
-                    data = thumb.tobytes("raw", thumb.mode)
-                    qim = QImage(data, thumb.size[0], thumb.size[1], QImage.Format_RGB888)
-                    pix = QPixmap.fromImage(qim)
-                    thumb_label.setPixmap(pix)
+                    # Let the base class handle the preview
+                    super().update_main_preview()
+                    
+                    # Restore the original path
+                    self.current_path = original_path
+                    
+                    # Clean up the temporary file after a short delay
+                    QTimer.singleShot(1000, lambda: os.unlink(temp_path) if os.path.exists(temp_path) else None)
+                    return
                     
                 except Exception as e:
-                    print(f"Error loading image {path}: {str(e)}")
-                    error_label = QLabel("Error loading image")
-                    error_label.setAlignment(Qt.AlignCenter)
-                    error_label.setStyleSheet("color: red;")
-                    thumb_layout.addWidget(error_label)
-                
-                # Set click event
-                thumb_label.mousePressEvent = lambda e, p=path: self.show_preview(p)
-                
-                # Add filename label
-                filename = os.path.basename(path)
-                filename_label = QLabel(filename)
-                filename_label.setAlignment(Qt.AlignCenter)
-                filename_label.setStyleSheet("font-size: 10px;")
-                filename_label.setWordWrap(True)
-                
-                # Add to layout
-                thumb_layout.addWidget(thumb_label)
-                thumb_layout.addWidget(filename_label)
-                
-                # Calculate position in grid (2 columns)
-                row = i // 2
-                col = i % 2
-                self.thumbnail_layout.addWidget(thumb_container, row, col)
-                
-                # Show first image in preview
-                if i == 0:
-                    self.show_preview(path)
-                    
-            except Exception as e:
-                print(f"Error creating thumbnail for {path}: {str(e)}")
-    
-    def select_output_dir(self):
-        dir_path = QFileDialog.getExistingDirectory(self, 'Select Output Directory')
-        if dir_path:
-            self.output_dir = dir_path
-            self.output_dir_label.setText(f"Output: {os.path.basename(dir_path)}")
-    
-    def show_preview(self, path):
-        try:
-            # Load the image
-            image = Image.open(path)
+                    # Clean up temp file if something went wrong
+                    if os.path.exists(temp_path):
+                        os.unlink(temp_path)
+                    raise
             
-            # Ensure image is in RGB mode for display
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
-            
-            # Resize for preview (max 800x600 while maintaining aspect ratio)
-            max_size = QSize(800, 600)
-            image.thumbnail((max_size.width(), max_size.height()))
-            
-            # Convert to QPixmap and set to label
-            data = image.tobytes("raw", image.mode)
-            qim = QImage(data, image.size[0], image.size[1], QImage.Format_RGB888)
-            pix = QPixmap.fromImage(qim)
-            
-            # Update preview
-            self.main_preview.setPixmap(pix)
-            self.main_preview.setAlignment(Qt.AlignCenter)
-            
-            # Show image info
-            img_size = os.path.getsize(path) / (1024 * 1024)  # Size in MB
-            self.size_info.setText(
-                f"{os.path.basename(path)}\n"
-                f"Dimensions: {image.width} x {image.height}\n"
-                f"Size: {img_size:.2f} MB\n"
-                f"Format: {image.format if hasattr(image, 'format') else 'Unknown'}"
-            )
-            
-            # Update current preview path
-            self.current_path = path
+            # For non-HEIC files, use the base class implementation
+            super().update_main_preview()
             
         except Exception as e:
-            print(f"Error loading preview for {path}: {str(e)}")
-            self.main_preview.setText("Error loading image")
-            self.size_info.clear()
+            error_msg = f"Error updating preview: {str(e)}"
+            print(error_msg)
+            if hasattr(self, 'main_preview'):
+                self.main_preview.setText("Error loading preview")
+            if hasattr(self, 'statusBar'):
+                self.statusBar().showMessage(error_msg, 5000)
     
-    def convert_images(self):
-        if not self.image_paths:
+    def convert_images(self) -> None:
+        """Convert all selected images to the target format."""
+        if not hasattr(self, 'image_paths') or not self.image_paths:
+            QMessageBox.warning(self, 'No Images', 'Please select at least one image to convert.')
             return
             
-        # Get output format and quality
+        if not hasattr(self, 'output_dir') or not self.output_dir:
+            QMessageBox.warning(self, 'No Output Directory', 'Please select an output directory.')
+            return
+            
+        # Get conversion settings
         output_format = self.format_combo.currentText().lower()
-        quality_map = {
-            "Maximum (100)": 100,
-            "High (90)": 90,
-            "Good (80)": 80,
-            "Medium (70)": 70,
-            "Low (60)": 60
-        }
-        quality = quality_map.get(self.quality_spin.currentText(), 90)
+        quality = int(self.quality_spin.currentText().split('(')[1].split(')')[0])
+        preserve_metadata = self.preserve_metadata.isChecked()
         
-        # Set up progress bar
+        # Disable controls during conversion
+        self.set_controls_enabled(False)
+        self.progress_bar.setVisible(True)
         self.progress_bar.setMaximum(len(self.image_paths))
         self.progress_bar.setValue(0)
-        self.progress_bar.setVisible(True)
         
-        # Process each image
-        converted_count = 0
-        for i, path in enumerate(self.image_paths):
-            try:
-                # Update progress
-                self.progress_bar.setValue(i + 1)
-                QApplication.processEvents()  # Keep UI responsive
+        # Create and start worker thread
+        self.worker_thread = HEICConversionWorker(
+            self.image_paths,
+            self.output_dir,
+            output_format,
+            quality,
+            preserve_metadata
+        )
+        
+        # Connect signals
+        self.worker_thread.progress_updated.connect(self.update_progress)
+        self.worker_thread.finished.connect(self.conversion_finished)
+        self.worker_thread.error_occurred.connect(self.show_error)
+        
+        # Start the worker thread
+        self.worker_thread.start()
+    
+    def set_controls_enabled(self, enabled: bool) -> None:
+        """Enable or disable all controls."""
+        self.convert_btn.setEnabled(enabled and bool(hasattr(self, 'image_paths') and self.image_paths))
+        if hasattr(self, 'file_controls'):
+            self.file_controls.setEnabled(enabled)
+        if hasattr(self, 'output_selector'):
+            self.output_selector.setEnabled(enabled)
+        if hasattr(self, 'format_combo'):
+            self.format_combo.setEnabled(enabled)
+        if hasattr(self, 'quality_spin'):
+            self.quality_spin.setEnabled(enabled)
+        if hasattr(self, 'preserve_metadata'):
+            self.preserve_metadata.setEnabled(enabled)
+        self.conversion_in_progress = not enabled
+    
+    def update_progress(self, current: int, total: int) -> None:
+        """Update progress bar and status."""
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(current)
+        
+        # Update status
+        if hasattr(self, 'statusBar'):
+            self.statusBar().showMessage(f"Converting image {current} of {total}...")
+    
+    def update_convert_button_text(self):
+        """Update the convert button text based on selected format."""
+        if hasattr(self, 'convert_btn') and hasattr(self, 'format_combo'):
+            format_text = self.format_combo.currentText()
+            self.convert_btn.setText(f"Convert to {format_text}")
+    
+    def conversion_finished(self) -> None:
+        """Handle completion of conversion process."""
+        self.set_controls_enabled(True)
+        self.progress_bar.setVisible(False)
+        
+        if hasattr(self, 'statusBar'):
+            self.statusBar().showMessage("Conversion completed successfully!", 5000)
+        
+        # Notify user
+        QMessageBox.information(
+            self,
+            'Conversion Complete',
+            f'Successfully converted {len(self.image_paths)} image(s) to {self.format_combo.currentText()}.',
+            QMessageBox.Ok
+        )
+    
+    def show_error(self, error_msg: str) -> None:
+        """Show error message to the user."""
+        self.set_controls_enabled(True)
+        self.progress_bar.setVisible(False)
+        
+        QMessageBox.critical(
+            self,
+            'Conversion Error',
+            f'An error occurred during conversion:\n{error_msg}',
+            QMessageBox.Ok
+        )
+
+
+class HEICConversionWorker(QThread):
+    """Worker thread for HEIC conversion tasks."""
+    
+    progress_updated = pyqtSignal(int, int)  # current, total
+    finished = pyqtSignal()
+    error_occurred = pyqtSignal(str)
+    
+    def __init__(
+        self,
+        input_files: List[str],
+        output_dir: str,
+        output_format: str,
+        quality: int,
+        preserve_metadata: bool = True
+    ):
+        super().__init__()
+        self.input_files = input_files
+        self.output_dir = output_dir
+        self.output_format = output_format
+        self.quality = quality
+        self.preserve_metadata = preserve_metadata
+        self.is_running = True
+    
+    def run(self) -> None:
+        """Main worker method."""
+        try:
+            total = len(self.input_files)
+            
+            for i, input_path in enumerate(self.input_files, 1):
+                if not self.is_running:
+                    break
+                    
+                try:
+                    self.convert_image(input_path)
+                    self.progress_updated.emit(i, total)
+                except Exception as e:
+                    self.error_occurred.emit(f"Error converting {os.path.basename(input_path)}: {str(e)}")
+            
+            self.finished.emit()
+            
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+    
+    def convert_image(self, input_path: str) -> None:
+        """Convert a single image from HEIC to target format."""
+        try:
+            # Create output filename
+            filename = os.path.splitext(os.path.basename(input_path))[0]
+            output_path = os.path.join(self.output_dir, f"{filename}.{self.output_format}")
+            
+            # Ensure output directory exists
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            
+            # Open and convert the image
+            with Image.open(input_path) as img:
+                # Convert to RGB if needed (required for JPEG)
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
                 
-                # Determine output path
-                if self.output_dir:
-                    output_dir = self.output_dir
-                else:
-                    output_dir = os.path.dirname(path)
+                # Save with specified format and quality
+                save_params = {'quality': self.quality}
                 
-                # Create output filename
-                base_name = os.path.splitext(os.path.basename(path))[0]
-                output_path = os.path.join(output_dir, f"{base_name}.{output_format}")
-                
-                # Convert and save the image
-                image = Image.open(path)
-                
-                # Preserve metadata if requested
-                save_kwargs = {'quality': quality}
-                if output_format == 'png':
-                    save_kwargs['compress_level'] = 9 - int((quality / 100) * 9)  # Map 0-100 to 9-0
-                
-                # Convert to RGB if saving as JPEG
-                if output_format == 'jpg' and image.mode != 'RGB':
-                    image = image.convert('RGB')
+                # Add format-specific parameters
+                if self.output_format == 'jpeg':
+                    save_params['progressive'] = True
+                    save_params['optimize'] = True
                 
                 # Save the image
-                image.save(output_path, **save_kwargs)
-                converted_count += 1
+                img.save(output_path, **save_params)
                 
-            except Exception as e:
-                print(f"Error converting {path}: {str(e)}")
-        
-        # Show completion message
-        self.progress_bar.setVisible(False)
-        QMessageBox.information(
-            self, 'Conversion Complete',
-            f'Successfully converted {converted_count} of {len(self.image_paths)} images.'
-        )
+                # Preserve metadata if requested and possible
+                if self.preserve_metadata and hasattr(img, 'info'):
+                    try:
+                        from PIL.ExifTags import TAGS
+                        # This is a simplified example - actual metadata preservation would be more complex
+                        pass
+                    except ImportError:
+                        pass
+                        
+        except Exception as e:
+            raise Exception(f"Failed to convert {input_path}: {str(e)}")
+    
+    def stop(self) -> None:
+        """Stop the conversion process."""
+        self.is_running = False

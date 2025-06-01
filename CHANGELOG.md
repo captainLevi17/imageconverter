@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 ### Added
+- Comprehensive project documentation and contribution guidelines
+- **Image Resizer Refactoring (2025-06-01)**:
+  - Removed preview image for a cleaner, more focused interface
+  - Simplified dimension controls and improved usability
+  - Enhanced output directory handling with better path validation
+  - Added detailed debug logging for troubleshooting
+  - Improved error handling and user feedback
+- Development setup instructions with virtual environment and Docker support
+- Pre-commit hooks for code quality checks
+- Type checking with mypy configuration
+- Test coverage reporting
+- CI-ready project structure
+- GitHub templates for issues and pull requests
+- Code of Conduct and Contributing guidelines
+- Development dependencies separation (requirements-dev.txt)
+- Pyproject.toml for unified tool configuration
+- Enhanced .gitignore for Python projects
+
+### Changed
+- **Project Structure (2025-06-01)**:
+  - Reorganized project structure for better maintainability
+  - Separated development and production dependencies
+  - Standardized code style with Black and isort
+  - Improved type hints across the codebase
+  - Enhanced test organization and coverage
+  - Updated documentation with detailed setup instructions
+  - Added pre-commit hooks for automated code quality checks
+  - Improved error handling and logging
+  - Optimized imports and removed unused dependencies
+  - Standardized docstrings and code documentation
+### Added
 - Added Background Remover Tool with AI-powered background removal
 - Implemented custom color selection for background replacement
 - Added transparent background support (PNG)

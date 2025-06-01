@@ -1,0 +1,15 @@
+USE SHARED UTILITY MODULES AS MUCH AS POSSIBLE TO AVOID DUPLICATION
+Shared Utility modules @ utils/
+USE common UI components from `utils/ui_components.py`
+    ThumbnailLabel
+    ImagePreviewGallery
+    FileControls
+Use image utilities from `utils/image_utils.py`
+   Image loading/saving
+   Format conversion
+   Thumbnail generation
+Use file operation utilities from `utils/file_utils.py`
+   File dialogs
+   Directory operations
+   File type validation
+Use preview management utilities from `utils/preview.py`

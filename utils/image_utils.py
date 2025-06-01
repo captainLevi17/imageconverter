@@ -5,20 +5,94 @@ This module contains common image processing functions used across the applicati
 """
 
 import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional, Tuple, Union, List, Dict, Any
+
 from PIL import Image, ImageOps
-from typing import Optional, Tuple, Union, List
 
 
-def load_image(image_path: str) -> Optional[Image.Image]:
+@dataclass
+class ImageData:
+    """Container class for image data and metadata."""
+    image: Image.Image
+    path: str
+    width: int
+    height: int
+    format: str
+    mode: str
+    size_bytes: int
+    metadata: Dict[str, Any] = None
+    
+    @classmethod
+    def from_path(cls, path: str) -> 'ImageData':
+        """Create an ImageData instance from a file path.
+        
+        Args:
+            path: Path to the image file.
+            
+        Returns:
+            ImageData: The created instance.
+            
+        Raises:
+            IOError: If the image cannot be loaded.
+        """
+        try:
+            # Check if this is a HEIC file
+            is_heic = str(path).lower().endswith(('.heic', '.heif'))
+            
+            # Use pillow_heif for HEIC files if available
+            if is_heic:
+                try:
+                    import pillow_heif
+                    pillow_heif.register_heif_opener()
+                except ImportError:
+                    pass  # Will fall back to regular Image.open
+            
+            with Image.open(path) as img:
+                img.load()  # Load image data
+                
+                # Convert to RGB if needed (for display)
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Get file size
+                size_bytes = Path(path).stat().st_size
+                
+                # Get metadata (EXIF, etc.)
+                metadata = {}
+                if hasattr(img, '_getexif') and img._getexif():
+                    metadata['exif'] = dict(img._getexif())
+                
+                return cls(
+                    image=img.copy(),
+                    path=path,
+                    width=img.width,
+                    height=img.height,
+                    format=img.format or 'HEIC' if is_heic else 'UNKNOWN',
+                    mode=img.mode,
+                    size_bytes=size_bytes,
+                    metadata=metadata
+                )
+        except Exception as e:
+            raise IOError(f"Failed to load image from {path}: {str(e)}")
+
+
+def load_image(image_path: str, as_image_data: bool = False) -> Optional[Union[Image.Image, ImageData]]:
     """Load an image from the given path.
     
     Args:
         image_path: Path to the image file.
+        as_image_data: If True, returns an ImageData object with metadata.
+                     If False, returns a PIL.Image.Image object.
         
     Returns:
-        PIL.Image.Image: The loaded image or None if loading fails.
+        Union[ImageData, Image.Image, None]: The loaded image data or image object,
+        or None if loading fails.
     """
     try:
+        if as_image_data:
+            return ImageData.from_path(image_path)
         return Image.open(image_path)
     except Exception as e:
         print(f"Error loading image {image_path}: {e}")

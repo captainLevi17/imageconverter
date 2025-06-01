@@ -37,7 +37,11 @@
     - [x] File type validation
   - [x] Create preview management in `utils/preview.py`
 - [ ] Refactor tools to use shared components
-  - [] Update Image Resizer 
+  - [x] Update Image Resizer (2025-06-01)
+    - [x] Removed preview image for cleaner interface
+    - [x] Simplified dimension controls
+    - [x] Improved output directory handling
+    - [x] Added detailed debug logging
   - [ ] Update Image Compressor 
   - [ ] Update HEIC Converter
   - [ ] Update Base64 Converter

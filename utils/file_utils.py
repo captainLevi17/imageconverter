@@ -195,17 +195,80 @@ def get_file_size(filepath: str, human_readable: bool = False) -> Union[int, str
     """
     try:
         size = os.path.getsize(filepath)
-        
-        if not human_readable:
-            return size
-            
-        # Convert to human-readable format
-        for unit in ['B', 'KB', 'MB', 'GB']:
-            if size < 1024.0:
-                return f"{size:.2f} {unit}"
-            size /= 1024.0
-        return f"{size:.2f} TB"
-        
-    except Exception as e:
+        if human_readable:
+            return _human_readable_size(size)
+        return size
+    except OSError as e:
         print(f"Error getting file size for {filepath}: {e}")
         return 0 if not human_readable else "0 B"
+
+
+def select_output_directory(start_dir: str = "") -> Tuple[Optional[str], str]:
+    """Open a directory selection dialog.
+    
+    Args:
+        start_dir: Initial directory to show in the dialog.
+        
+    Returns:
+        Tuple[Optional[str], str]: (selected_directory, message)
+        - selected_directory: The selected directory path, or None if cancelled
+        - message: Status message (empty if successful, error message if failed)
+    """
+    from PyQt5.QtWidgets import QFileDialog
+    
+    try:
+        options = QFileDialog.Options()
+        options |= QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
+        
+        directory = QFileDialog.getExistingDirectory(
+            None,
+            "Select Output Directory",
+            start_dir or str(Path.home()),
+            options=options
+        )
+        
+        if not directory:
+            return None, "No directory selected"
+            
+        # Validate the selected directory
+        is_valid, message = validate_directory(directory)
+        if not is_valid:
+            return None, message
+            
+        return directory, ""
+        
+    except Exception as e:
+        return None, f"Error selecting directory: {str(e)}"
+
+
+def _human_readable_size(size: float) -> str:
+    """Convert size in bytes to human-readable format.
+    
+    Args:
+        size: Size in bytes.
+        
+    Returns:
+        str: Human-readable size string.
+    """
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if size < 1024.0:
+            return f"{size:.2f} {unit}"
+        size /= 1024.0
+    return f"{size:.2f} TB"
+
+
+def get_relative_path(base_dir: str, full_path: str) -> str:
+    """Get a relative path from a base directory.
+    
+    Args:
+        base_dir: The base directory.
+        full_path: The full path to make relative.
+        
+    Returns:
+        str: The relative path, or the original path if it's not a subpath of base_dir.
+    """
+    try:
+        relative = os.path.relpath(full_path, base_dir)
+        return relative if not relative.startswith('..') else full_path
+    except ValueError:
+        return full_path

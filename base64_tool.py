@@ -3,9 +3,10 @@ import os
 import json
 from io import BytesIO
 from datetime import datetime
+from utils.base_tool import BaseTool
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QFileDialog, QScrollArea, QMessageBox, QApplication,
     QSizePolicy, QComboBox, QGroupBox, QFrame, QStyle
 )
@@ -14,25 +15,35 @@ from PyQt5.QtGui import QPixmap, QImage
 from PIL import Image
 
 
-class Base64Tool(QWidget):
+class Base64Tool(BaseTool):
     def __init__(self):
-        super().__init__()
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        super().__init__("Base64 Tool")
         self.current_image = None
-        # Initialize buttons to None to prevent attribute errors
+        
+        # Initialize UI elements
+        self.img_path_label = None
+        self.img_preview = None
+        self.b64_output = None
         self.copy_btn = None
         self.download_btn = None
-        self.init_ui()
+        self.b64_input = None
+        self.convert_btn = None
+        self.preview_label = None
+        self.save_btn = None
+        
+    def clear_images(self):
+        """Clear the current image and reset the UI."""
+        super().clear_images()
+        self.current_image = None
+        if hasattr(self, 'b64_output') and self.b64_output:
+            self.b64_output.clear()
+        if hasattr(self, 'img_preview') and self.img_preview:
+            self.img_preview.clear()
+        if hasattr(self, 'img_path_label') and self.img_path_label:
+            self.img_path_label.setText("No image selected")
     
-    def init_ui(self):
-        # Main layout
-        main_widget = QWidget()
-        main_widget.setObjectName("base64ToolWidget")
-        
-        layout = QVBoxLayout(main_widget)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(16)
-        
+    def setup_tool_controls(self, control_layout):
+        """Set up the tool-specific controls."""
         # Image to Base64 section
         img_to_b64_group = QGroupBox("Image to Base64")
         img_to_b64_group.setObjectName("imgToB64Group")
@@ -109,39 +120,40 @@ class Base64Tool(QWidget):
         copy_buttons_container.setSpacing(8)
         
         # Copy to Clipboard button
-        copy_btn = QPushButton("Copy to Clipboard")
-        copy_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_DialogSaveButton')))
-        copy_btn.clicked.connect(self.copy_to_clipboard)
+        self.copy_btn = QPushButton("Copy to Clipboard")
+        self.copy_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_DialogSaveButton')))
+        self.copy_btn.clicked.connect(self.copy_to_clipboard)
         
         # Copy HTML Snippet button
-        copy_html_btn = QPushButton("Copy HTML Snippet")
-        copy_html_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_DialogSaveButton')))
-        copy_html_btn.clicked.connect(self.copy_html_snippet)
+        self.copy_html_btn = QPushButton("Copy HTML Snippet")
+        self.copy_html_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_DialogSaveButton')))
+        self.copy_html_btn.clicked.connect(self.copy_html_snippet)
         
         # Add copy buttons to container
-        copy_buttons_container.addWidget(copy_btn)
-        copy_buttons_container.addWidget(copy_html_btn)
+        copy_buttons_container.addWidget(self.copy_btn)
+        copy_buttons_container.addWidget(self.copy_html_btn)
         
         # Download button
-        download_btn = QPushButton("Download")
-        download_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_ArrowDown')))
-        download_btn.clicked.connect(self.download_base64)
+        self.download_btn = QPushButton("Download")
+        self.download_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_ArrowDown')))
+        self.download_btn.clicked.connect(self.download_base64)
         
         # Add buttons with stretch
         button_layout.addLayout(copy_buttons_container)
         button_layout.addStretch()
-        button_layout.addWidget(download_btn)
+        button_layout.addWidget(self.download_btn)
         
         img_to_b64_layout.addLayout(button_layout)
         
-        layout.addWidget(img_to_b64_group, stretch=1)
+        # Add to control layout
+        control_layout.addWidget(img_to_b64_group, stretch=1)
         
         # Add a separator
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setFrameShadow(QFrame.Sunken)
         separator.setObjectName("separator")
-        layout.addWidget(separator)
+        control_layout.addWidget(separator)
         
         # Base64 to Image section
         b64_to_img_group = QGroupBox("Base64 to Image")
@@ -168,10 +180,10 @@ class Base64Tool(QWidget):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         
-        decode_btn = QPushButton("Decode and Preview")
-        decode_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_MediaPlay')))
-        decode_btn.clicked.connect(self.decode_base64)
-        button_layout.addWidget(decode_btn)
+        self.convert_btn = QPushButton("Decode and Preview")
+        self.convert_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_MediaPlay')))
+        self.convert_btn.clicked.connect(self.decode_base64)
+        button_layout.addWidget(self.convert_btn)
         
         b64_to_img_layout.addLayout(button_layout)
         
@@ -181,42 +193,29 @@ class Base64Tool(QWidget):
         preview_layout = QVBoxLayout(preview_group)
         preview_layout.setContentsMargins(0, 12, 0, 0)
         
-        self.decoded_preview = QLabel()
-        self.decoded_preview.setObjectName("decodedPreview")
-        self.decoded_preview.setProperty("preview", True)
-        self.decoded_preview.setAlignment(Qt.AlignCenter)
-        self.decoded_preview.setMinimumSize(300, 200)
-        self.decoded_preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        preview_layout.addWidget(self.decoded_preview)
+        self.preview_label = QLabel()
+        self.preview_label.setObjectName("decodedPreview")
+        self.preview_label.setProperty("preview", True)
+        self.preview_label.setAlignment(Qt.AlignCenter)
+        self.preview_label.setMinimumSize(300, 200)
+        self.preview_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        preview_layout.addWidget(self.preview_label)
         
         # Save button
-        save_btn = QPushButton("Save Image")
-        save_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_DialogSaveButton')))
-        save_btn.clicked.connect(self.save_decoded_image)
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
         
-        # Button container to center the save button
-        btn_container = QWidget()
-        btn_layout = QHBoxLayout(btn_container)
-        btn_layout.setContentsMargins(0, 12, 0, 0)
-        btn_layout.addStretch()
-        btn_layout.addWidget(save_btn)
-        btn_layout.addStretch()
+        self.save_btn = QPushButton("Save Image")
+        self.save_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_DialogSaveButton')))
+        self.save_btn.clicked.connect(self.save_decoded_image)
+        self.save_btn.setEnabled(False)
+        button_layout.addWidget(self.save_btn)
         
-        preview_layout.addWidget(btn_container)
-        b64_to_img_layout.addWidget(preview_group, stretch=1)
+        preview_layout.addLayout(button_layout)
+        b64_to_img_layout.addWidget(preview_group, stretch=2)
         
-        layout.addWidget(b64_to_img_group, stretch=1)
-        
-        # Set up scroll area
-        scroll = QScrollArea()
-        scroll.setWidget(main_widget)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)  # Remove the frame
-        
-        # Set scroll area as the central widget
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(scroll)
+        # Add to control layout
+        control_layout.addWidget(b64_to_img_group, stretch=1)
     
     def browse_image(self):
         file_path, _ = QFileDialog.getOpenFileName(

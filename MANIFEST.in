@@ -1,0 +1,28 @@
+include README.md
+include CHANGELOG.md
+include LICENSE
+include requirements.txt
+include requirements-dev.txt
+include pyproject.toml
+include .pre-commit-config.yaml
+recursive-include assets *
+recursive-include ui *
+recursive-include tests *
+recursive-include docs *
+
+# Exclude development and build artifacts
+global-exclude __pycache__
+global-exclude *.py[cod]
+prune .github/
+prune .vscode/
+prune .idea/
+prune build/
+prune dist/
+prune *.egg-info/
+prune venv/
+prune .venv/
+prune env/
+prune .pytest_cache/
+prune .mypy_cache/
+prune .coverage
+prune htmlcov/

@@ -1,6 +1,8 @@
 # Image Master
 
-A Python desktop application for image manipulation with PyQt5.
+A powerful, user-friendly desktop application for image processing built with PyQt5. Image Master provides a suite of tools for common image manipulation tasks with an intuitive interface.
+
+![Image Master Screenshot](screenshot.png)
 
 ## Features
 
@@ -63,24 +65,52 @@ A Python desktop application for image manipulation with PyQt5.
 ### Image Cropper Tool
 - Interactively select an area of an image to crop
 - Preview the selected crop area
-- Choose from predefined aspect ratios (e.g., 1:1, 16:9, 4:3, Free) or crop freely.
-- Save the cropped image in various formats (JPEG, PNG, WebP)
-- Adjustable quality for JPEG/WebP output
-- Custom output directory selection
+- Choose from predefined aspect ratios (e.g., 1:1, 16:9, 4:3, Free)
 
-## Installation
+## 🚀 Installation
 
-1. Clone this repository
-2. Install requirements:
+### Prerequisites
+- Python 3.8 or higher
+- pip (Python package manager)
+- Git (for cloning the repository)
+
+### Setup Instructions
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/yourusername/imageconverter.git
+   cd imageconverter
+   ```
+
+2. **Create and activate a virtual environment** (recommended):
+   ```bash
+   # Windows
+   python -m venv venv
+   .\venv\Scripts\activate
+
+   # macOS/Linux
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Run the application**:
+   ```bash
+   python main.py
+   ```
+
+### Optional: Install with Docker
+
 ```bash
-pip install -r requirements.txt
-```
+# Build the Docker image
+docker build -t image-master .
 
-## Usage
-
-Run the application:
-```bash
-python main.py
+# Run the container
+docker run -d --name image-master -v /path/to/images:/app/images image-master
 ```
 
 ### Resizer Tool Guide

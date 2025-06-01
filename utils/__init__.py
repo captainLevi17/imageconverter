@@ -4,6 +4,9 @@ Utils package for Image Master application.
 This package contains shared utilities and components used across the application.
 """
 
+# Base Tool
+from .base_tool import BaseTool
+
 # UI Components
 from .ui_components import (
     ThumbnailLabel,
@@ -13,6 +16,7 @@ from .ui_components import (
 
 # Image Utilities
 from .image_utils import (
+    ImageData,
     load_image,
     save_image,
     resize_image,
@@ -42,10 +46,16 @@ from .preview import (
 )
 
 __all__ = [
+    # Base Tool
+    'BaseTool',
+    
     # UI Components
     'ThumbnailLabel',
     'ImagePreviewGallery',
     'FileControls',
+    
+    # Image Data
+    'ImageData',
     
     # Image Utilities
     'load_image',
