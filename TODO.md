@@ -42,10 +42,22 @@
     - [x] Simplified dimension controls
     - [x] Improved output directory handling
     - [x] Added detailed debug logging
-  - [ ] Update Image Compressor 
-  - [ ] Update HEIC Converter
-  - [ ] Update Base64 Converter
-  - [ ] Update WebP Converter
+  - [x] Update Image Compressor (2025-06-02)
+    - [x] Streamlined interface
+    - [x] Improved compression controls
+    - [x] Better file handling
+  - [x] Update HEIC Converter (2025-06-02)
+    - [x] Simplified conversion process
+    - [x] Better error handling
+    - [x] Improved output options
+  - [x] Update Base64 Converter (2025-06-02)
+    - [x] Removed preview for cleaner interface
+    - [x] Combined decode and save functionality
+    - [x] Improved file handling
+  - [x] Update WebP Converter (2025-06-02)
+    - [x] Simplified conversion options
+    - [x] Better format handling
+    - [x] Improved error messages
   - [ ] Update Background Remover
   - [ ] Update Image Cropper
 - [x] Update documentation (2025-05-28)

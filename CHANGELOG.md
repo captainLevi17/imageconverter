@@ -3,6 +3,23 @@
 ## [Unreleased]
 ### Added
 - Comprehensive project documentation and contribution guidelines
+- **Tool Updates (2025-06-02)**:
+  - **Image Compressor**:
+    - Streamlined interface for better usability
+    - Enhanced compression controls with real-time feedback
+    - Improved file handling and error reporting
+  - **HEIC Converter**:
+    - Simplified conversion process
+    - Better error handling for unsupported formats
+    - Improved output options and format support
+  - **Base64 Converter**:
+    - Removed preview for cleaner interface
+    - Combined decode and save functionality into single step
+    - Improved file handling and error messages
+  - **WebP Converter**:
+    - Simplified conversion options
+    - Better format handling and validation
+    - Improved error messages and user feedback
 - **Image Resizer Refactoring (2025-06-01)**:
   - Removed preview image for a cleaner, more focused interface
   - Simplified dimension controls and improved usability

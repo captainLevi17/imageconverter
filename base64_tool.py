@@ -3,47 +3,36 @@ import os
 import json
 from io import BytesIO
 from datetime import datetime
-from utils.base_tool import BaseTool
 
 from PyQt5.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QFileDialog, QScrollArea, QMessageBox, QApplication,
-    QSizePolicy, QComboBox, QGroupBox, QFrame, QStyle
+    QSizePolicy, QComboBox, QGroupBox, QFrame, QStyle, QFileDialog
 )
 from PyQt5.QtCore import Qt, QFileInfo
 from PyQt5.QtGui import QPixmap, QImage
 from PIL import Image
 
 
-class Base64Tool(BaseTool):
+class Base64Tool(QWidget):
     def __init__(self):
-        super().__init__("Base64 Tool")
+        super().__init__()
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.current_image = None
-        
-        # Initialize UI elements
-        self.img_path_label = None
-        self.img_preview = None
-        self.b64_output = None
+        # Initialize buttons to None to prevent attribute errors
         self.copy_btn = None
         self.download_btn = None
-        self.b64_input = None
-        self.convert_btn = None
-        self.preview_label = None
-        self.save_btn = None
-        
-    def clear_images(self):
-        """Clear the current image and reset the UI."""
-        super().clear_images()
-        self.current_image = None
-        if hasattr(self, 'b64_output') and self.b64_output:
-            self.b64_output.clear()
-        if hasattr(self, 'img_preview') and self.img_preview:
-            self.img_preview.clear()
-        if hasattr(self, 'img_path_label') and self.img_path_label:
-            self.img_path_label.setText("No image selected")
+        self.init_ui()
     
-    def setup_tool_controls(self, control_layout):
-        """Set up the tool-specific controls."""
+    def init_ui(self):
+        # Main layout
+        main_widget = QWidget()
+        main_widget.setObjectName("base64ToolWidget")
+        
+        layout = QVBoxLayout(main_widget)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(16)
+        
         # Image to Base64 section
         img_to_b64_group = QGroupBox("Image to Base64")
         img_to_b64_group.setObjectName("imgToB64Group")
@@ -120,40 +109,39 @@ class Base64Tool(BaseTool):
         copy_buttons_container.setSpacing(8)
         
         # Copy to Clipboard button
-        self.copy_btn = QPushButton("Copy to Clipboard")
-        self.copy_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_DialogSaveButton')))
-        self.copy_btn.clicked.connect(self.copy_to_clipboard)
+        copy_btn = QPushButton("Copy to Clipboard")
+        copy_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_DialogSaveButton')))
+        copy_btn.clicked.connect(self.copy_to_clipboard)
         
         # Copy HTML Snippet button
-        self.copy_html_btn = QPushButton("Copy HTML Snippet")
-        self.copy_html_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_DialogSaveButton')))
-        self.copy_html_btn.clicked.connect(self.copy_html_snippet)
+        copy_html_btn = QPushButton("Copy HTML Snippet")
+        copy_html_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_DialogSaveButton')))
+        copy_html_btn.clicked.connect(self.copy_html_snippet)
         
         # Add copy buttons to container
-        copy_buttons_container.addWidget(self.copy_btn)
-        copy_buttons_container.addWidget(self.copy_html_btn)
+        copy_buttons_container.addWidget(copy_btn)
+        copy_buttons_container.addWidget(copy_html_btn)
         
         # Download button
-        self.download_btn = QPushButton("Download")
-        self.download_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_ArrowDown')))
-        self.download_btn.clicked.connect(self.download_base64)
+        download_btn = QPushButton("Download")
+        download_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_ArrowDown')))
+        download_btn.clicked.connect(self.download_base64)
         
         # Add buttons with stretch
         button_layout.addLayout(copy_buttons_container)
         button_layout.addStretch()
-        button_layout.addWidget(self.download_btn)
+        button_layout.addWidget(download_btn)
         
         img_to_b64_layout.addLayout(button_layout)
         
-        # Add to control layout
-        control_layout.addWidget(img_to_b64_group, stretch=1)
+        layout.addWidget(img_to_b64_group, stretch=1)
         
         # Add a separator
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setFrameShadow(QFrame.Sunken)
         separator.setObjectName("separator")
-        control_layout.addWidget(separator)
+        layout.addWidget(separator)
         
         # Base64 to Image section
         b64_to_img_group = QGroupBox("Base64 to Image")
@@ -176,46 +164,33 @@ class Base64Tool(BaseTool):
         input_layout.addWidget(self.b64_input)
         b64_to_img_layout.addWidget(input_group, stretch=2)
         
-        # Decode button
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        
-        self.convert_btn = QPushButton("Decode and Preview")
-        self.convert_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_MediaPlay')))
-        self.convert_btn.clicked.connect(self.decode_base64)
-        button_layout.addWidget(self.convert_btn)
-        
-        b64_to_img_layout.addLayout(button_layout)
-        
-        # Decoded image preview
-        preview_group = QGroupBox("Preview")
-        preview_group.setObjectName("previewGroup")
-        preview_layout = QVBoxLayout(preview_group)
-        preview_layout.setContentsMargins(0, 12, 0, 0)
-        
-        self.preview_label = QLabel()
-        self.preview_label.setObjectName("decodedPreview")
-        self.preview_label.setProperty("preview", True)
-        self.preview_label.setAlignment(Qt.AlignCenter)
-        self.preview_label.setMinimumSize(300, 200)
-        self.preview_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        preview_layout.addWidget(self.preview_label)
-        
         # Save button
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
+        save_btn = QPushButton("Decode and Save Image")
+        save_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_DialogSaveButton')))
+        save_btn.clicked.connect(self.save_decoded_image)
         
-        self.save_btn = QPushButton("Save Image")
-        self.save_btn.setIcon(self.style().standardIcon(getattr(self.style(), 'SP_DialogSaveButton')))
-        self.save_btn.clicked.connect(self.save_decoded_image)
-        self.save_btn.setEnabled(False)
-        button_layout.addWidget(self.save_btn)
+        # Button container to center the save button
+        btn_container = QWidget()
+        btn_layout = QHBoxLayout(btn_container)
+        btn_layout.setContentsMargins(0, 12, 0, 0)
+        btn_layout.addStretch()
+        btn_layout.addWidget(save_btn)
+        btn_layout.addStretch()
         
-        preview_layout.addLayout(button_layout)
-        b64_to_img_layout.addWidget(preview_group, stretch=2)
+        b64_to_img_layout.addWidget(btn_container)
         
-        # Add to control layout
-        control_layout.addWidget(b64_to_img_group, stretch=1)
+        layout.addWidget(b64_to_img_group, stretch=1)
+        
+        # Set up scroll area
+        scroll = QScrollArea()
+        scroll.setWidget(main_widget)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)  # Remove the frame
+        
+        # Set scroll area as the central widget
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(scroll)
     
     def browse_image(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -318,7 +293,7 @@ class Base64Tool(BaseTool):
         base64_str = self.b64_output.toPlainText()
         if not base64_str:
             return None
-            
+                
         if format_type.startswith("TXT"):
             return base64_str
         elif format_type == "JSON":
@@ -340,7 +315,7 @@ class Base64Tool(BaseTool):
         if formatted_output is None:
             self.show_message("Error", "No data to copy", QMessageBox.Warning)
             return
-            
+                
         clipboard = QApplication.clipboard()
         clipboard.setText(formatted_output)
         self.show_message("Success", "Content copied to clipboard", QMessageBox.Information)
@@ -350,20 +325,20 @@ class Base64Tool(BaseTool):
         if not hasattr(self, 'current_image') or not self.current_image:
             self.show_message("Error", "No image loaded", QMessageBox.Warning)
             return
-            
+                
         # Get the base64 string (without any formatting)
         base64_str = self.b64_output.toPlainText()
         if not base64_str:
             self.show_message("Error", "No base64 data available", QMessageBox.Warning)
             return
-            
+                
         # Create HTML img tag
         mime_type = f"image/{os.path.splitext(self.current_image)[1][1:].lower()}"
         if mime_type == "image/jpg":
             mime_type = "image/jpeg"
-            
+                
         html_snippet = f'<img src="data:{mime_type};base64,{base64_str}" alt="Base64 encoded image">'
-        
+            
         # Copy to clipboard
         clipboard = QApplication.clipboard()
         clipboard.setText(html_snippet)
@@ -374,7 +349,7 @@ class Base64Tool(BaseTool):
         msg.setIcon(icon)
         msg.setWindowTitle(title)
         msg.setText(message)
-        
+            
         # Apply custom style to the message box
         msg.setStyleSheet("""
             QMessageBox {
@@ -396,64 +371,22 @@ class Base64Tool(BaseTool):
                 background-color: #2c5282;
             }
         """)
-        
+            
         # Set a proper icon
         if icon == QMessageBox.Warning:
             msg.setIconPixmap(self.style().standardIcon(QStyle.SP_MessageBoxWarning).pixmap(32, 32))
         elif icon == QMessageBox.Information:
             msg.setIconPixmap(self.style().standardIcon(QStyle.SP_MessageBoxInformation).pixmap(32, 32))
-            
+                
         msg.exec_()
     
-    def download_base64(self):
-        if not hasattr(self, 'current_image') or not self.current_image:
-            QMessageBox.warning(self, "Error", "No image loaded")
-            return
-            
-        format_type = self.format_combo.currentText()
-        formatted_output = self.get_formatted_output(format_type)
-        
-        if formatted_output is None:
-            QMessageBox.warning(self, "Error", "No data to download")
-            return
-        
-        # Determine file extension and filter
-        if format_type.startswith("TXT"):
-            ext = "txt"
-            file_filter = "Text Files (*.txt)"
-        elif format_type == "JSON":
-            ext = "json"
-            file_filter = "JSON Files (*.json)"
-        else:  # HTML
-            ext = "html"
-            file_filter = "HTML Files (*.html)"
-        
-        # Suggest filename based on original image
-        base_name = os.path.splitext(os.path.basename(self.current_image))[0]
-        suggested_name = f"{base_name}_base64.{ext}"
-        
-        # Get save path
-        path, _ = QFileDialog.getSaveFileName(
-            self, 
-            'Save Base64 Output',
-            suggested_name,
-            file_filter
-        )
-        
-        if path:
-            try:
-                with open(path, 'w', encoding='utf-8') as f:
-                    f.write(formatted_output)
-                QMessageBox.information(self, "Success", f"File saved successfully to {path}")
-            except Exception as e:
-                QMessageBox.warning(self, "Error", f"Could not save file: {str(e)}")
-    
-    def decode_base64(self):
+    def save_decoded_image(self):
+        """Decode and save the base64 image to a file"""
         b64_str = self.b64_input.toPlainText().strip()
         if not b64_str:
             QMessageBox.warning(self, "Error", "Please enter a Base64 string")
             return
-        
+            
         try:
             # Decode Base64
             img_data = base64.b64decode(b64_str)
@@ -465,30 +398,64 @@ class Base64Tool(BaseTool):
                 
             # Create a white background
             background = Image.new('RGBA', img.size, (255, 255, 255, 255))
-            
+                
             # Composite the image onto the white background
             img = Image.alpha_composite(background, img)
             
-            # Convert to QPixmap
-            data = img.tobytes('raw', 'RGBA')
-            qimg = QImage(data, img.size[0], img.size[1], QImage.Format_RGBA8888)
-            pixmap = QPixmap.fromImage(qimg)
+            # Show save file dialog
+            path, _ = QFileDialog.getSaveFileName(
+                self, 
+                'Save Decoded Image', 
+                os.path.expanduser("~"),
+                'PNG (*.png);;JPEG (*.jpg *.jpeg);;BMP (*.bmp);;WEBP (*.webp)'
+            )
             
-            self.decoded_preview.setPixmap(pixmap)
-            self.current_decoded_image = img
+            if path:
+                img.save(path)
+                QMessageBox.information(self, "Success", f"Image saved to {path}")
+                
         except Exception as e:
-            QMessageBox.warning(self, "Error", f"Could not decode Base64: {str(e)}")
+            QMessageBox.warning(self, "Error", f"Could not decode or save image: {str(e)}")
     
-    def save_decoded_image(self):
-        if not hasattr(self, 'current_decoded_image') or not self.current_decoded_image:
-            QMessageBox.warning(self, "Error", "No decoded image to save")
+    def download_base64(self):
+        """Save the base64 encoded data to a file"""
+        if not hasattr(self, 'current_image') or not self.current_image:
+            QMessageBox.warning(self, "Error", "No image loaded")
             return
+            
+        # Get the formatted output based on the selected format
+        formatted_output = self.get_formatted_output()
+        if not formatted_output:
+            QMessageBox.warning(self, "Error", "No data to save")
+            return
+            
+        # Get the base filename without extension
+        base_name = os.path.splitext(os.path.basename(self.current_image))[0]
         
-        path, _ = QFileDialog.getSaveFileName(self, 'Save Image', '',
-                                            'PNG (*.png);;JPEG (*.jpg *.jpeg);;BMP (*.bmp);;WEBP (*.webp)')
+        # Determine the file extension based on the format
+        format_type = self.format_combo.currentText()
+        if format_type == "JSON":
+            ext = ".json"
+        elif format_type == "HTML":
+            ext = ".html"
+        else:  # TXT (Plain Text)
+            ext = ".txt"
+            
+        # Set up file dialog
+        default_path = os.path.join(os.path.expanduser("~"), f"{base_name}_base64{ext}")
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            'Save Base64 Data',
+            default_path,
+            f"{format_type} Files (*{ext});;All Files (*)"
+        )
+        
         if path:
             try:
-                self.current_decoded_image.save(path)
-                QMessageBox.information(self, "Saved", f"Image saved to {path}")
+                with open(path, 'w', encoding='utf-8') as f:
+                    f.write(formatted_output)
+                QMessageBox.information(self, "Success", f"Base64 data saved to {path}")
             except Exception as e:
-                QMessageBox.warning(self, "Error", f"Could not save image: {str(e)}")
+                QMessageBox.warning(self, "Error", f"Could not save file: {str(e)}")
+    
+    # Removed the old save_decoded_image method as it's been replaced with a combined version
