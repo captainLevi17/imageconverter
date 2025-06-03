@@ -1,7 +1,31 @@
+import os
 from setuptools import setup, find_packages
+from setuptools.command.install import install
+from setuptools.command.develop import develop
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
+
+# Get the list of data files
+def get_data_files():
+    data_files = []
+    for root, dirs, files in os.walk('assets'):
+        if files:
+            data_files.append((os.path.join('image_master', root), 
+                            [os.path.join(root, f) for f in files]))
+    return data_files
+
+class PostInstallCommand(install):
+    """Post-installation for installation mode."""
+    def run(self):
+        install.run(self)
+        # Additional steps can be added here if needed
+
+class PostDevelopCommand(develop):
+    """Post-installation for development mode."""
+    def run(self):
+        develop.run(self)
+        # Additional steps can be added here if needed
 
 setup(
     name="image-master",
@@ -14,7 +38,17 @@ setup(
     url="https://github.com/yourusername/imageconverter",
     packages=find_packages(),
     package_data={
-        "": ["*.ui", "*.qss", "*.png", "*.ico"],
+        "": ["*.ui", "*.qss", "*.png", "*.ico", "*.qrc", "*.svg"],
+    },
+    data_files=get_data_files(),
+    entry_points={
+        'console_scripts': [
+            'imagemaster=main:main',
+        ],
+    },
+    cmdclass={
+        'install': PostInstallCommand,
+        'develop': PostDevelopCommand,
     },
     install_requires=[
         "PyQt5>=5.15.9",

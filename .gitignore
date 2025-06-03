@@ -32,6 +32,18 @@ MANIFEST
 *.manifest
 *.spec
 
+# Build artifacts
+build_windows.py
+installer.nsi
+ImageMaster/
+*.exe
+*.msi
+*.log
+
+# NSIS output
+dist/
+!dist/ImageMaster-Installer.exe  # Keep the final installer
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
